@@ -1,0 +1,2042 @@
+<title>Off-the-Shelf Spring Calculator</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M6 6h20M6 11h20M6 16h20M6 21h20M6 26h20' stroke='%231f5fa8' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<meta name="description" content="Work out what force a stock compression spring gives at what length, and search a vendor catalogue backwards from the force you need.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Light is the base layer; dark is redefined twice so both the OS default
+   (unstamped) and an explicit data-theme choice resolve correctly. */
+:root{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#161a21; --muted:#5c6673; --line:#dde1e7;
+  --accent:#1256a0; --accent-soft:#e7eff8; --accent-line:#1256a0;
+  --ok:#166b47; --warn:#8a5a12; --bad:#a32b2b;
+  --ok-soft:#e4f1ea; --warn-soft:#f8efdd; --bad-soft:#f9e8e8;
+  --shadow:0 1px 2px rgba(22,26,33,.05);
+  --sans:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --cond:"IBM Plex Sans Condensed","IBM Plex Sans",-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#111418; --panel:#181c22; --ink:#e6e9ee; --muted:#98a2b0; --line:#2a3039;
+    --accent:#63a4e8; --accent-soft:#16232f; --accent-line:#3d7fc4;
+    --ok:#5cbb8b; --warn:#d9a95d; --bad:#e08585;
+    --ok-soft:#14261d; --warn-soft:#282116; --bad-soft:#2a1a1a;
+    --shadow:0 1px 2px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111418; --panel:#181c22; --ink:#e6e9ee; --muted:#98a2b0; --line:#2a3039;
+  --accent:#63a4e8; --accent-soft:#16232f; --accent-line:#3d7fc4;
+  --ok:#5cbb8b; --warn:#d9a95d; --bad:#e08585;
+  --ok-soft:#14261d; --warn-soft:#282116; --bad-soft:#2a1a1a;
+  --shadow:0 1px 2px rgba(0,0,0,.3);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 var(--sans)}
+.wrap{max-width:1120px;margin:0 auto;padding:24px 16px 72px}
+header h1{font-size:23px;font-weight:600;letter-spacing:-.01em;margin:0 0 6px;text-wrap:balance}
+header p{margin:0 0 20px;color:var(--muted);max-width:64ch}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+h2{font:600 12px/1.3 var(--cond);margin:0 0 14px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+h3{font-size:14px;font-weight:600;margin:20px 0 8px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:18px;margin-bottom:16px;box-shadow:var(--shadow)}
+
+/* tabs */
+nav.tabs{display:flex;gap:2px;flex-wrap:wrap;margin-bottom:18px;border-bottom:1px solid var(--line)}
+nav.tabs button{background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);
+  padding:9px 13px;font:500 14px/1 var(--sans);cursor:pointer;margin-bottom:-1px}
+nav.tabs button:hover{color:var(--ink)}
+nav.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.panel[hidden]{display:none}
+
+/* forms */
+.grid{display:grid;gap:14px 16px;grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+label{display:block;font:600 11px/1.3 var(--cond);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+.combo{display:flex}
+input,select,textarea{width:100%;background:var(--bg);color:var(--ink);
+  border:1px solid var(--line);border-radius:5px;padding:7px 9px;font:15px/1.4 var(--sans)}
+input[type=number]{font-family:var(--mono);font-size:14px;font-variant-numeric:tabular-nums}
+.combo input{border-radius:5px 0 0 5px;border-right:none}
+.combo select{border-radius:0 5px 5px 0;width:auto;min-width:74px;background:var(--panel)}
+textarea{font:12px/1.5 var(--mono);min-height:170px;resize:vertical}
+.hint{font-size:12.5px;color:var(--muted);margin-top:5px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:16px}
+button.go,button.alt{border:1px solid var(--accent);border-radius:5px;padding:8px 16px;
+  font:600 14px/1.3 var(--sans);cursor:pointer;background:var(--accent);color:#fff}
+button.alt{background:transparent;color:var(--accent)}
+button.alt:hover,button.go:hover{filter:brightness(1.1)}
+button.link{background:none;border:none;color:var(--accent);font:inherit;cursor:pointer;padding:0;text-decoration:underline}
+
+/* callout */
+.callout{background:var(--accent-soft);border:1px solid var(--line);border-left:3px solid var(--accent-line);
+  border-radius:5px;padding:13px 15px;margin:0 0 16px}
+.callout.warn{background:var(--warn-soft);border-left-color:var(--warn)}
+.callout.bad{background:var(--bad-soft);border-left-color:var(--bad)}
+.callout p{margin:0 0 6px}
+.callout p:last-child{margin:0}
+.big{font:600 21px/1.3 var(--mono);letter-spacing:-.01em;color:var(--ink)}
+
+/* tables */
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{border-collapse:collapse;width:100%;font-size:13px;white-space:nowrap}
+th,td{text-align:right;padding:7px 10px;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child,th.l,td.l{text-align:left}
+th{font:600 11px/1.3 var(--cond);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);
+  position:sticky;top:0;background:var(--panel)}
+tbody tr:hover{background:var(--accent-soft)}
+tbody tr.sel{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+td.num{font-variant-numeric:tabular-nums;font-family:var(--mono);font-size:12.5px}
+tr.rejected{color:var(--muted)}
+.pill{display:inline-block;padding:2px 8px;border-radius:99px;font:600 11px/1.5 var(--cond);letter-spacing:.04em;text-transform:uppercase}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}
+.derived{color:var(--muted);font:400 11px/1.4 var(--sans)}
+
+/* spec readout */
+dl.specs{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;margin:0;font-size:13px}
+dl.specs dt{color:var(--muted)}
+dl.specs dd{margin:0;font-family:var(--mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+.cols{display:grid;gap:24px;grid-template-columns:repeat(auto-fit,minmax(270px,1fr))}
+ul.notes{margin:12px 0 0;padding-left:18px;font-size:13px;color:var(--muted)}
+ul.notes li{margin-bottom:4px}
+.muted{color:var(--muted)}
+figure{margin:20px 0 0}
+#viz-slot figure{overflow-x:auto}
+#viz-slot svg{min-width:460px}
+.figwrap{position:relative}
+.tip{position:absolute;transform:translate(-50%,-140%);background:var(--panel);
+  border:1px solid var(--line);border-radius:5px;padding:7px 10px;font:12px/1.45 var(--sans);
+  pointer-events:none;white-space:nowrap;box-shadow:0 2px 12px rgba(0,0,0,.16);z-index:2}
+.tip strong{font-family:var(--mono);font-size:13px}
+figcaption{font-size:12.5px;color:var(--muted);margin-top:8px;max-width:70ch}
+svg{max-width:100%;height:auto;display:block}
+svg text{font-family:var(--mono)}
+details{margin-top:12px}
+summary{cursor:pointer;font-size:13px;color:var(--accent)}
+code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px;border-radius:4px}
+.eq{font:13px/1.7 var(--mono);background:var(--bg);border:1px solid var(--line);
+  border-radius:5px;padding:10px 12px;margin:10px 0;overflow-x:auto}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+<header>
+  <h1>Off-the-shelf spring calculator</h1>
+  <p>Pick a stock compression spring and get the force it makes at any length &mdash; or start from the
+     force you need and search a vendor catalogue backwards. Built around what McMaster-Carr actually
+     publishes (OD, wire diameter, free length, rate) and derives the rest.</p>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button role="tab" data-tab="find" aria-selected="true">Find a spring</button>
+  <button role="tab" data-tab="analyze" aria-selected="false">Analyse one spring</button>
+  <button role="tab" data-tab="catalog" aria-selected="false">Catalogue</button>
+  <button role="tab" data-tab="method" aria-selected="false">Method</button>
+</nav>
+
+<!-- ------------------------------------------------------------- FIND -->
+<section class="panel" id="tab-find">
+  <div class="card">
+    <h2>What you need</h2>
+    <div class="grid">
+      <div><label for="f-force">Output force</label>
+        <div class="combo"><input type="number" id="f-force" value="1.5" step="any">
+          <select id="f-force-u"><option>N</option><option>lbf</option><option>gf</option><option>ozf</option><option>kgf</option></select></div></div>
+      <div><label for="f-maxod">Max outside diameter</label>
+        <div class="combo"><input type="number" id="f-maxod" value="0.5" step="any">
+          <select id="f-len-u"><option value="in">in</option><option value="mm">mm</option></select></div></div>
+      <div><label for="f-minid">Must clear a rod of (optional)</label>
+        <input type="number" id="f-minid" placeholder="none" step="any"></div>
+      <div><label for="f-maxfree">Max free length (optional)</label>
+        <input type="number" id="f-maxfree" placeholder="none" step="any"></div>
+      <div><label for="f-maxinst">Max installed length (optional)</label>
+        <input type="number" id="f-maxinst" placeholder="none" step="any"></div>
+      <div><label for="f-postol">Position tolerance at assembly &plusmn;</label>
+        <input type="number" id="f-postol" value="0.010" step="any"></div>
+      <div><label for="f-ratetol">Spring rate tolerance &plusmn;%</label>
+        <input type="number" id="f-ratetol" value="10" step="any"></div>
+      <div><label for="f-maxtravel">Max share of usable travel</label>
+        <input type="number" id="f-maxtravel" value="90" step="any"></div>
+      <div><label for="f-material">Material</label>
+        <select id="f-material"><option value="">any</option></select></div>
+      <div><label for="f-sort">Rank by</label>
+        <select id="f-sort">
+          <option value="robustness">best all-round</option>
+          <option value="force-precision">tightest force control</option>
+          <option value="travel">most travel headroom</option>
+          <option value="compact">smallest package</option>
+          <option value="rate">softest rate</option>
+        </select></div>
+    </div>
+    <div class="row">
+      <button class="go" id="f-run">Search catalogue</button>
+      <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:13px;text-transform:none;font-weight:400">
+        <input type="checkbox" id="f-showall" style="width:auto"> show springs that do not fit, and why</label>
+    </div>
+  </div>
+
+  <div class="card" id="f-shopping"></div>
+  <div class="card" id="f-results"></div>
+  <div id="f-detail"></div>
+</section>
+
+<!-- ---------------------------------------------------------- ANALYSE -->
+<section class="panel" id="tab-analyze" hidden>
+  <div class="card">
+    <h2>The spring</h2>
+    <p class="hint" style="margin-top:-6px">Type in what the vendor lists. Anything you leave blank is derived
+      if it can be &mdash; give it a rate <em>or</em> a coil count, and it works out the other.</p>
+    <div class="grid">
+      <div><label for="a-part">Part number / name</label><input id="a-part" placeholder="9657K304"></div>
+      <div><label for="a-units">Units in</label>
+        <select id="a-units"><option value="in">inch &amp; lbf</option><option value="mm">mm &amp; N</option></select></div>
+      <div><label for="a-od">Outside diameter</label><input type="number" id="a-od" step="any" value="0.36"></div>
+      <div><label for="a-id">Inside diameter</label><input type="number" id="a-id" step="any" placeholder="derived"></div>
+      <div><label for="a-wire">Wire diameter</label><input type="number" id="a-wire" step="any" value="0.032"></div>
+      <div><label for="a-free">Free length</label><input type="number" id="a-free" step="any" value="1.0"></div>
+      <div><label for="a-rate">Spring rate</label><input type="number" id="a-rate" step="any" value="2.48"></div>
+      <div><label for="a-coils">Total coils</label><input type="number" id="a-coils" step="any" placeholder="derived"></div>
+      <div><label for="a-maxload">Vendor max load</label><input type="number" id="a-maxload" step="any" placeholder="optional"></div>
+      <div><label for="a-maxdefl">Vendor max deflection</label><input type="number" id="a-maxdefl" step="any" placeholder="optional"></div>
+      <div><label for="a-material">Material</label><select id="a-material"></select></div>
+      <div><label for="a-ends">Ends</label><select id="a-ends"></select></div>
+    </div>
+    <h3>Working point</h3>
+    <div class="grid">
+      <div><label for="a-force">Force I want</label>
+        <div class="combo"><input type="number" id="a-force" value="1.5" step="any">
+          <select id="a-force-u"><option>N</option><option>lbf</option><option>gf</option><option>ozf</option></select></div>
+        <div class="hint">&rarr; solves for the length</div></div>
+      <div><label for="a-at">&hellip;or a length I am fixed at</label>
+        <input type="number" id="a-at" step="any" placeholder="optional">
+        <div class="hint">&rarr; solves for the force</div></div>
+      <div><label for="a-postol">Position tolerance &plusmn;</label><input type="number" id="a-postol" value="0.010" step="any"></div>
+      <div><label for="a-ratetol">Rate tolerance &plusmn;%</label><input type="number" id="a-ratetol" value="10" step="any"></div>
+      <div><label for="a-endcond">How it is guided</label><select id="a-endcond"></select></div>
+    </div>
+    <div class="row">
+      <button class="go" id="a-run">Calculate</button>
+      <button class="alt" id="a-save">Add to catalogue</button>
+    </div>
+  </div>
+  <div id="a-out"></div>
+</section>
+
+<!-- ---------------------------------------------------------- CATALOG -->
+<section class="panel" id="tab-catalog" hidden>
+  <div class="card">
+    <h2>Load real vendor data</h2>
+    <p class="hint" style="margin-top:-6px">
+      On <a href="https://www.mcmaster.com/products/compression-springs/" target="_blank" rel="noopener">mcmaster.com</a>
+      filter the compression-spring table down to what you are after, select the table in the browser,
+      copy, and paste it below. The header row matters &mdash; it is what tells the parser which column is which.
+      CSV works too, as does a metric table if you switch the units.</p>
+    <textarea id="c-paste" placeholder="Part #&#9;OD&#9;ID&#9;Wire Dia.&#9;Lg.&#9;Spring Rate, lbs./in.&#9;Material&#9;Ends
+9657K304&#9;0.36&quot;&#9;0.296&quot;&#9;0.032&quot;&#9;0.471&quot;&#9;4.5&#9;Zinc-Plated Music Wire&#9;Closed &amp; Ground"></textarea>
+    <div class="grid" style="margin-top:12px">
+      <div><label for="c-vendor">Vendor</label><input id="c-vendor" value="McMaster-Carr"></div>
+      <div><label for="c-units">Table units</label>
+        <select id="c-units"><option value="us">inch &amp; lbs./in.</option><option value="si">mm &amp; N/mm</option></select></div>
+      <div><label for="c-mode">On import</label>
+        <select id="c-mode"><option value="append">add to what is loaded</option><option value="replace">replace everything</option></select></div>
+    </div>
+    <div class="row">
+      <button class="go" id="c-import">Parse and load</button>
+      <button class="alt" id="c-example">Load example catalogue</button>
+      <button class="alt" id="c-file">Open a .json / .csv file</button>
+      <button class="alt" id="c-download">Download as JSON</button>
+      <button class="alt" id="c-clear">Clear</button>
+      <input type="file" id="c-fileinput" accept=".json,.csv,.tsv,.txt" hidden>
+    </div>
+    <div id="c-status"></div>
+  </div>
+  <div class="card" id="c-list"></div>
+</section>
+
+<!-- ----------------------------------------------------------- METHOD -->
+<section class="panel" id="tab-method" hidden>
+  <div class="card">
+    <h2>What this actually computes</h2>
+    <p>A helical compression spring is linear over its working range, so everything follows from the rate:</p>
+    <div class="eq">F = k &middot; x&nbsp;&nbsp;&nbsp;&nbsp;x = L&#8320; &minus; L&nbsp;&nbsp;&nbsp;&nbsp;k = G d&#8308; / (8 D&sup3; N&#9040;)</div>
+    <p class="hint">d = wire diameter, D = mean diameter = OD &minus; d, N&#9040; = active coils, G = shear modulus.</p>
+
+    <h3>Why the coil count matters even though vendors do not print it</h3>
+    <p>McMaster lists OD, ID, wire diameter, free length and rate &mdash; but not coil count, and therefore not
+       solid height. Without solid height you cannot tell whether your working point is even reachable.
+       So the rate equation is inverted for N&#9040;, the end treatment gives total coils and solid height from
+       there, and travel to solid falls out. Those derived numbers are marked <span class="derived">derived</span>
+       everywhere they appear.</p>
+    <div class="eq">N&#9040; = G d&#8308; / (8 D&sup3; k)&nbsp;&nbsp;&nbsp;&nbsp;N&#8348; = N&#9040; + inactive coils&nbsp;&nbsp;&nbsp;&nbsp;L&#8347; = N&#8348; d (ground ends)</div>
+
+    <h3>Usable travel</h3>
+    <p>Vendor max deflection is used when published. Otherwise usable travel is taken as 85% of travel to
+       solid: running a stock spring down to solid is how it takes a permanent set and stops being the
+       spring you specified.</p>
+
+    <h3>Stress</h3>
+    <div class="eq">&tau; = K&#8347; &middot; 8 F D / (&pi; d&sup3;)&nbsp;&nbsp;&nbsp;&nbsp;K&#8347; = 1 + 0.5/C&nbsp;&nbsp;&nbsp;&nbsp;C = D/d</div>
+    <p>Allowable is a fraction of ultimate tensile strength, itself a function of wire diameter
+       (S&#8348; = A/d&#7745;, Shigley table 10-4): 45% for music wire, 35% for austenitic stainless. The Wahl
+       factor is reported alongside for anyone taking the spring into cyclic duty, where it is the one to use.</p>
+
+    <h3>The number most calculators skip: how tightly can you hold the force?</h3>
+    <p>Force error comes from two places &mdash; where the spring actually ends up (dF/dx = k, so a stiff
+       spring punishes assembly slop) and the rate tolerance of the spring itself (&plusmn;10% is normal for
+       stock, commercial-grade springs). Both are reported, worst case and RSS.
+       This is why a softer spring compressed further beats a stiff one nudged slightly, every time.</p>
+
+    <h3>Buckling</h3>
+    <p>Small-diameter springs get slender fast. The Shigley criterion is applied: below a critical free
+       length the spring is stable at any deflection; above it, a critical deflection is reported, and how
+       the ends are guided changes it by a factor of four.</p>
+
+    <h3>Assumptions and limits</h3>
+    <ul class="notes">
+      <li>Round wire, helical compression springs, static or low-cycle duty. No fatigue life, no surge frequency.</li>
+      <li>Rate is treated as constant. Real springs stiffen in the last 15&ndash;20% of travel as the end coils close.</li>
+      <li>Shear modulus is a single published value per material; music wire actually varies a few percent with wire size.</li>
+      <li>Nothing here is a substitute for measuring the spring you were actually shipped.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h2>Where the numbers come from</h2>
+    <p>No spring data is bundled. Catalogue rows are whatever you paste in or import, and every row keeps
+       the part number and a link back to the vendor page so you can check it. The example catalogue is
+       synthetic &mdash; geometrically consistent, useful for trying the tool, and
+       <strong>not real vendor parts</strong>. Do not order from it.</p>
+    <p class="hint">This is the standalone build &mdash; one file, works offline. Engine, tests and a command-line version:
+       <a href="https://github.com/ahmedbma/clnew">source on GitHub</a>.</p>
+  </div>
+</section>
+
+</div>
+<script>window.EXAMPLE_CATALOGUE = {"version":1,"generated":"2026-08-23T00:11:04.034Z","units":"SI (mm, N, N/mm)","vendor":"EXAMPLE - synthetic, not real parts","warning":"These are NOT real vendor part numbers. Geometrically consistent demo data only. Do not order from this file.","springs":[{"partNumber":"EX-01","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"Music Wire","materialKey":"music-wire","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":4.571999999999999,"wireDia_mm":0.4064,"freeLength_mm":12.7,"rate_Npmm":0.24868010604999644,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-02","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"Music Wire","materialKey":"music-wire","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":4.571999999999999,"wireDia_mm":0.508,"freeLength_mm":19.049999999999997,"rate_Npmm":0.5183754323295701,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-03","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"Music Wire","materialKey":"music-wire","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":6.095999999999999,"wireDia_mm":0.45719999999999994,"freeLength_mm":12.7,"rate_Npmm":0.18563444536126497,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-04","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"302 Stainless Steel","materialKey":"stainless-302","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":6.095999999999999,"wireDia_mm":0.5588,"freeLength_mm":19.049999999999997,"rate_Npmm":0.2907105465091508,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-05","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"Music Wire","materialKey":"music-wire","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":6.095999999999999,"wireDia_mm":0.6604,"freeLength_mm":25.4,"rate_Npmm":0.6181977284200616,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-06","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"Music Wire","materialKey":"music-wire","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":7.619999999999999,"wireDia_mm":0.508,"freeLength_mm":15.875,"rate_Npmm":0.12258878467253345,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-07","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"302 Stainless Steel","materialKey":"stainless-302","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":7.619999999999999,"wireDia_mm":0.6096,"freeLength_mm":22.224999999999998,"rate_Npmm":0.19263951877112404,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-08","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"Music Wire","materialKey":"music-wire","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":7.619999999999999,"wireDia_mm":0.7619999999999999,"freeLength_mm":31.75,"rate_Npmm":0.49385767539506337,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-09","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"Music Wire","materialKey":"music-wire","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":9.143999999999998,"wireDia_mm":0.5588,"freeLength_mm":15.875,"rate_Npmm":0.10857863785281535,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-10","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"Music Wire","materialKey":"music-wire","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":9.143999999999998,"wireDia_mm":0.6604,"freeLength_mm":22.224999999999998,"rate_Npmm":0.18213190865633544,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-11","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"302 Stainless Steel","materialKey":"stainless-302","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":9.143999999999998,"wireDia_mm":0.8128,"freeLength_mm":25.4,"rate_Npmm":0.4343145514112614,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-12","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"Music Wire","materialKey":"music-wire","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":9.143999999999998,"wireDia_mm":0.9652,"freeLength_mm":38.099999999999994,"rate_Npmm":0.7863194902566789,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-13","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"Music Wire","materialKey":"music-wire","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":10.668,"wireDia_mm":0.6604,"freeLength_mm":19.049999999999997,"rate_Npmm":0.1348476631397868,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-14","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"302 Stainless Steel","materialKey":"stainless-302","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":10.668,"wireDia_mm":0.8128,"freeLength_mm":25.4,"rate_Npmm":0.2626902528697146,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-15","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"Music Wire","materialKey":"music-wire","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":10.668,"wireDia_mm":1.0413999999999999,"freeLength_mm":38.099999999999994,"rate_Npmm":0.726776366272877,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-16","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"Music Wire","materialKey":"music-wire","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":12.7,"wireDia_mm":0.889,"freeLength_mm":25.4,"rate_Npmm":0.26794405792710885,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-17","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"302 Stainless Steel","materialKey":"stainless-302","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":12.7,"wireDia_mm":1.0413999999999999,"freeLength_mm":31.75,"rate_Npmm":0.42730947800140234,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-18","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"Music Wire","materialKey":"music-wire","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":12.7,"wireDia_mm":1.2192,"freeLength_mm":44.449999999999996,"rate_Npmm":0.8038321737813265,"source":"generated example data","provenance":"vendor-table-import"}]};</script>
+<script type="module">
+const sm = (() => {
+
+/**
+ * spring-math.js -- helical compression spring engine.
+ *
+ * Pure functions, no DOM, no dependencies. Runs in the browser and in Node.
+ *
+ * INTERNAL UNITS ARE SI, ALWAYS:
+ *   length mm | force N | rate N/mm | stress MPa | modulus GPa
+ * Anything that reads a vendor catalog converts on the way in (see catalog.js).
+ *
+ * References:
+ *   Shigley, "Mechanical Engineering Design", ch.10 (Sut = A/d^m, allowable
+ *   torsional stress fractions, buckling criterion).
+ *   SMI / Associated Spring "Design Handbook" (shear moduli, end-condition
+ *   coil counts, commercial rate tolerance).
+ */
+
+/* ------------------------------------------------------------------ units */
+
+const IN_TO_MM = 25.4;
+const LBF_TO_N = 4.4482216152605;
+const PSI_TO_MPA = 0.00689475729316836;
+const LBF_PER_IN_TO_N_PER_MM = LBF_TO_N / IN_TO_MM; // 0.175126...
+
+const inToMm = (v) => v * IN_TO_MM;
+const mmToIn = (v) => v / IN_TO_MM;
+const lbfToN = (v) => v * LBF_TO_N;
+const nToLbf = (v) => v / LBF_TO_N;
+const lbfPerInToNPerMm = (v) => v * LBF_PER_IN_TO_N_PER_MM;
+const nPerMmToLbfPerIn = (v) => v / LBF_PER_IN_TO_N_PER_MM;
+const psiToMpa = (v) => v * PSI_TO_MPA;
+const mpaToPsi = (v) => v / PSI_TO_MPA;
+
+/* -------------------------------------------------------------- materials */
+
+/**
+ * G_GPa   shear modulus, the number that sets spring rate.
+ * E_GPa   Young's modulus, only used for the buckling criterion.
+ * sut     piecewise Sut = A / d^m with d in mm, giving MPa (Shigley T10-4).
+ * tauFrac allowable torsional stress as a fraction of Sut, static service,
+ *         set NOT removed (Shigley T10-6). Springs with set removed or shot
+ *         peened tolerate more; pass {setRemoved:true} for the higher number.
+ */
+const MATERIALS = {
+  'music-wire': {
+    name: 'Music wire (ASTM A228)',
+    G_GPa: 79.3, E_GPa: 203.4, tauFrac: 0.45, tauFracSet: 0.60,
+    sut: [{ dMax: 6.5, A: 2211, m: 0.145 }],
+    aliases: ['music wire', 'music-wire', 'zinc-plated music wire', 'a228',
+      'music-wire steel', 'piano wire'],
+  },
+  'hard-drawn': {
+    name: 'Hard-drawn carbon steel (ASTM A227)',
+    G_GPa: 79.3, E_GPa: 200.0, tauFrac: 0.45, tauFracSet: 0.60,
+    sut: [{ dMax: 12.7, A: 1783, m: 0.190 }],
+    aliases: ['hard drawn', 'hard-drawn', 'a227', 'carbon steel', 'steel',
+      'zinc-plated steel', 'spring steel'],
+  },
+  'oil-tempered': {
+    name: 'Oil-tempered carbon steel (ASTM A229)',
+    G_GPa: 77.2, E_GPa: 200.0, tauFrac: 0.50, tauFracSet: 0.65,
+    sut: [{ dMax: 12.7, A: 1855, m: 0.187 }],
+    aliases: ['oil tempered', 'oil-tempered', 'a229', 'oq&t'],
+  },
+  'chrome-vanadium': {
+    name: 'Chrome-vanadium alloy steel (ASTM A232)',
+    G_GPa: 77.2, E_GPa: 203.4, tauFrac: 0.50, tauFracSet: 0.65,
+    sut: [{ dMax: 11.1, A: 2005, m: 0.168 }],
+    aliases: ['chrome vanadium', 'chrome-vanadium', 'a232', 'chromium vanadium'],
+  },
+  'chrome-silicon': {
+    name: 'Chrome-silicon alloy steel (ASTM A401)',
+    G_GPa: 77.2, E_GPa: 203.4, tauFrac: 0.50, tauFracSet: 0.65,
+    sut: [{ dMax: 9.5, A: 1974, m: 0.108 }],
+    aliases: ['chrome silicon', 'chrome-silicon', 'a401', 'chromium silicon'],
+  },
+  'stainless-302': {
+    name: '302 / 304 stainless (ASTM A313)',
+    G_GPa: 69.0, E_GPa: 193.0, tauFrac: 0.35, tauFracSet: 0.50,
+    sut: [
+      { dMax: 2.5, A: 1867, m: 0.146 },
+      { dMax: 5.0, A: 2065, m: 0.263 },
+      { dMax: 10.0, A: 2911, m: 0.478 },
+    ],
+    aliases: ['302 stainless steel', '302 stainless', '304 stainless steel',
+      '304 stainless', 'stainless steel', 'stainless', 'a313', '18-8'],
+  },
+  'stainless-316': {
+    name: '316 stainless',
+    G_GPa: 69.0, E_GPa: 193.0, tauFrac: 0.35, tauFracSet: 0.50,
+    sut: [{ dMax: 10.0, A: 1725, m: 0.146, approx: true }],
+    aliases: ['316 stainless steel', '316 stainless', '316'],
+  },
+  'stainless-17-7': {
+    name: '17-7 PH stainless',
+    G_GPa: 75.8, E_GPa: 203.4, tauFrac: 0.45, tauFracSet: 0.60,
+    sut: [{ dMax: 10.0, A: 2065, m: 0.146, approx: true }],
+    aliases: ['17-7 ph', '17-7ph', '17-7 stainless', '631'],
+  },
+  'phosphor-bronze': {
+    name: 'Phosphor bronze (ASTM B159)',
+    G_GPa: 41.4, E_GPa: 103.4, tauFrac: 0.35, tauFracSet: 0.50,
+    sut: [
+      { dMax: 0.6, A: 1000, m: 0 },
+      { dMax: 2.0, A: 913, m: 0.028 },
+      { dMax: 7.5, A: 932, m: 0.064 },
+    ],
+    aliases: ['phosphor bronze', 'phosphor-bronze', 'b159', 'bronze'],
+  },
+  'beryllium-copper': {
+    name: 'Beryllium copper (ASTM B197)',
+    G_GPa: 48.3, E_GPa: 128.0, tauFrac: 0.35, tauFracSet: 0.50,
+    sut: [{ dMax: 7.5, A: 1240, m: 0, approx: true }],
+    aliases: ['beryllium copper', 'beryllium-copper', 'becu', 'b197'],
+  },
+  'inconel-x750': {
+    name: 'Inconel X-750',
+    G_GPa: 72.4, E_GPa: 213.7, tauFrac: 0.35, tauFracSet: 0.50,
+    sut: [{ dMax: 7.5, A: 1450, m: 0, approx: true }],
+    aliases: ['inconel x-750', 'inconel x750', 'inconel', 'x-750'],
+  },
+};
+
+const DEFAULT_MATERIAL = 'music-wire';
+
+/** Resolve a free-text material name (a vendor column) to a MATERIALS key. */
+function resolveMaterial(text) {
+  if (!text) return null;
+  const t = String(text).toLowerCase().trim();
+  if (MATERIALS[t]) return t;
+  // Longest alias wins, so "302 stainless steel" beats bare "steel".
+  let best = null;
+  let bestLen = 0;
+  for (const [key, mat] of Object.entries(MATERIALS)) {
+    for (const alias of mat.aliases) {
+      if (t.includes(alias) && alias.length > bestLen) {
+        best = key;
+        bestLen = alias.length;
+      }
+    }
+  }
+  return best;
+}
+
+function getMaterial(key) {
+  return MATERIALS[key] || MATERIALS[DEFAULT_MATERIAL];
+}
+
+/** Ultimate tensile strength (MPa) for a wire diameter, Sut = A/d^m. */
+function ultimateTensileStrength(materialKey, d_mm) {
+  const mat = getMaterial(materialKey);
+  const band = mat.sut.find((b) => d_mm <= b.dMax) || mat.sut[mat.sut.length - 1];
+  return {
+    sut_MPa: band.A / Math.pow(d_mm, band.m),
+    extrapolated: d_mm > mat.sut[mat.sut.length - 1].dMax,
+    approx: !!band.approx,
+  };
+}
+
+/** Allowable torsional (shear) stress, MPa, static service. */
+function allowableShearStress(materialKey, d_mm, { setRemoved = false } = {}) {
+  const mat = getMaterial(materialKey);
+  const { sut_MPa, extrapolated, approx } = ultimateTensileStrength(materialKey, d_mm);
+  const frac = setRemoved ? mat.tauFracSet : mat.tauFrac;
+  return { tauAllow_MPa: sut_MPa * frac, sut_MPa, fraction: frac, extrapolated, approx };
+}
+
+/* -------------------------------------------------------------- end types */
+
+/**
+ * activeFromTotal / totalFromActive and the solid-length rule for each end
+ * treatment. "closed" is also called "squared".
+ */
+const END_TYPES = {
+  'closed-and-ground': {
+    name: 'Closed and ground',
+    inactiveCoils: 2,
+    solid: (Nt, d) => Nt * d,
+    aliases: ['closed & ground', 'closed and ground', 'squared and ground',
+      'squared & ground', 'c&g', 'ground'],
+  },
+  'closed': {
+    name: 'Closed (squared), not ground',
+    inactiveCoils: 2,
+    solid: (Nt, d) => (Nt + 1) * d,
+    aliases: ['closed', 'squared', 'closed not ground', 'squared not ground'],
+  },
+  'open-and-ground': {
+    name: 'Open and ground',
+    inactiveCoils: 1,
+    solid: (Nt, d) => Nt * d,
+    aliases: ['open & ground', 'open and ground', 'plain and ground',
+      'plain & ground'],
+  },
+  'open': {
+    name: 'Open (plain)',
+    inactiveCoils: 0,
+    solid: (Nt, d) => (Nt + 1) * d,
+    aliases: ['open', 'plain', 'open not ground'],
+  },
+};
+
+const DEFAULT_ENDS = 'closed-and-ground';
+
+function resolveEnds(text) {
+  if (!text) return null;
+  const t = String(text).toLowerCase().trim();
+  if (END_TYPES[t]) return t;
+  let best = null;
+  let bestLen = 0;
+  for (const [key, e] of Object.entries(END_TYPES)) {
+    for (const alias of e.aliases) {
+      if (t.includes(alias) && alias.length > bestLen) {
+        best = key;
+        bestLen = alias.length;
+      }
+    }
+  }
+  return best;
+}
+
+function getEnds(key) {
+  return END_TYPES[key] || END_TYPES[DEFAULT_ENDS];
+}
+
+const activeFromTotal = (Nt, endsKey) => Nt - getEnds(endsKey).inactiveCoils;
+const totalFromActive = (Na, endsKey) => Na + getEnds(endsKey).inactiveCoils;
+const solidLength = (Nt, d_mm, endsKey) => getEnds(endsKey).solid(Nt, d_mm);
+
+/* ---------------------------------------------------------- core mechanics */
+
+const meanDiameter = (od_mm, d_mm) => od_mm - d_mm;
+const springIndex = (D_mm, d_mm) => D_mm / d_mm;
+
+/** Rate, N/mm.  k = G d^4 / (8 D^3 Na) */
+function rateFromGeometry({ G_GPa, d_mm, D_mm, activeCoils }) {
+  const G_MPa = G_GPa * 1000; // GPa -> MPa == N/mm^2
+  return (G_MPa * Math.pow(d_mm, 4)) / (8 * Math.pow(D_mm, 3) * activeCoils);
+}
+
+/** Active coils implied by a published rate -- the inverse of the above. */
+function activeCoilsFromRate({ G_GPa, d_mm, D_mm, rate_Npmm }) {
+  const G_MPa = G_GPa * 1000;
+  return (G_MPa * Math.pow(d_mm, 4)) / (8 * Math.pow(D_mm, 3) * rate_Npmm);
+}
+
+/** Wahl correction factor -- curvature + direct shear, use for cyclic duty. */
+const wahlFactor = (C) => (4 * C - 1) / (4 * C - 4) + 0.615 / C;
+
+/** Direct-shear factor only -- the correct one for static duty (Shigley). */
+const staticShearFactor = (C) => 1 + 0.5 / C;
+
+/** Torsional stress in the wire, MPa.  tau = K * 8 F D / (pi d^3) */
+function shearStress({ force_N, D_mm, d_mm, factor = 1 }) {
+  return (factor * 8 * force_N * D_mm) / (Math.PI * Math.pow(d_mm, 3));
+}
+
+const forceAtDeflection = (rate_Npmm, deflection_mm) => rate_Npmm * deflection_mm;
+const deflectionForForce = (rate_Npmm, force_N) => force_N / rate_Npmm;
+const forceAtLength = (rate_Npmm, freeLength_mm, length_mm) =>
+  rate_Npmm * (freeLength_mm - length_mm);
+const lengthForForce = (rate_Npmm, freeLength_mm, force_N) =>
+  freeLength_mm - force_N / rate_Npmm;
+
+/**
+ * Buckling of a compression spring (Shigley 10-6).
+ * endCondition alpha: 0.5 both ends squared+guided against flat parallel
+ * plates, 0.707 one end pivoted, 1.0 both ends pivoted, 2.0 one end clamped
+ * and the other free.
+ */
+const END_CONDITIONS = {
+  'fixed-fixed': { name: 'Both ends on parallel flat plates (guided)', alpha: 0.5 },
+  'fixed-pivot': { name: 'One end plate, one end pivoted', alpha: 0.707 },
+  'pivot-pivot': { name: 'Both ends pivoted / free to tilt', alpha: 1.0 },
+  'fixed-free': { name: 'One end clamped, other end free', alpha: 2.0 },
+};
+
+function bucklingAnalysis({ freeLength_mm, D_mm, materialKey, endCondition = 'fixed-fixed' }) {
+  const mat = getMaterial(materialKey);
+  const E = mat.E_GPa;
+  const G = mat.G_GPa;
+  const alpha = (END_CONDITIONS[endCondition] || END_CONDITIONS['fixed-fixed']).alpha;
+
+  // Absolutely stable at any deflection below this free length.
+  const stableBelow_mm = (Math.PI * D_mm / alpha) * Math.sqrt((2 * (E - G)) / (2 * G + E));
+  if (freeLength_mm <= stableBelow_mm) {
+    return { alpha, stableBelow_mm, unconditionallyStable: true, criticalDeflection_mm: Infinity };
+  }
+  const C1 = E / (2 * (E - G));
+  const C2 = (2 * Math.PI * Math.PI * (E - G)) / (2 * G + E);
+  const lambda = (alpha * freeLength_mm) / D_mm;
+  const inner = 1 - C2 / (lambda * lambda);
+  const ratio = C1 * (1 - Math.sqrt(Math.max(inner, 0)));
+  return {
+    alpha,
+    stableBelow_mm,
+    unconditionallyStable: false,
+    slenderness: lambda,
+    criticalDeflection_mm: ratio * freeLength_mm,
+  };
+}
+
+/* ------------------------------------------------------ spring derivation */
+
+const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+/**
+ * Fill in whatever a sparse vendor listing left out.
+ *
+ * This is the part that makes a McMaster row usable: McMaster publishes OD,
+ * ID, wire diameter, free length and rate, but not coil count or solid
+ * length -- so travel-to-solid, the thing that decides whether your working
+ * point is reachable, is not in the table. Inverting the rate equation for
+ * active coils recovers it.
+ *
+ * Every derived field is recorded in `derived` so the UI can mark it as
+ * calculated rather than vendor-published.
+ *
+ * Input is SI and may be sparse:
+ *   { partNumber, vendor, url, material, ends, od_mm, id_mm, wireDia_mm,
+ *     freeLength_mm, solidLength_mm, rate_Npmm, maxLoad_N, maxDeflection_mm,
+ *     totalCoils, activeCoils, G_GPa }
+ */
+function normalizeSpring(raw) {
+  const s = { ...raw };
+  const derived = [];
+  const warnings = [];
+
+  s.materialKey = s.materialKey || resolveMaterial(s.material) || DEFAULT_MATERIAL;
+  if (s.material && !resolveMaterial(s.material)) {
+    warnings.push(`Material "${s.material}" not recognised; assumed ${getMaterial(s.materialKey).name}.`);
+  }
+  s.endsKey = s.endsKey || resolveEnds(s.ends) || null;
+  if (!s.endsKey) {
+    s.endsKey = DEFAULT_ENDS;
+    if (s.ends) warnings.push(`End type "${s.ends}" not recognised; assumed closed and ground.`);
+    else derived.push('endsKey');
+  }
+  const mat = getMaterial(s.materialKey);
+  s.G_GPa = num(s.G_GPa) ?? mat.G_GPa;
+
+  // --- wire / diameters: any two of OD, ID, wire dia give the third.
+  let od = num(s.od_mm), id = num(s.id_mm), d = num(s.wireDia_mm);
+  if (d == null && od != null && id != null) { d = (od - id) / 2; derived.push('wireDia_mm'); }
+  if (id == null && od != null && d != null) { id = od - 2 * d; derived.push('id_mm'); }
+  if (od == null && id != null && d != null) { od = id + 2 * d; derived.push('od_mm'); }
+  s.od_mm = od; s.id_mm = id; s.wireDia_mm = d;
+
+  if (od == null || d == null) {
+    return { ...s, derived, warnings, incomplete: true,
+      missing: [od == null && 'outside diameter', d == null && 'wire diameter'].filter(Boolean) };
+  }
+
+  s.meanDia_mm = meanDiameter(od, d);
+  s.springIndex = springIndex(s.meanDia_mm, d);
+  if (s.springIndex < 4) warnings.push(`Spring index C=${s.springIndex.toFixed(1)} is below 4 - tightly wound, high stress concentration, hard to manufacture.`);
+  if (s.springIndex > 14) warnings.push(`Spring index C=${s.springIndex.toFixed(1)} is above 14 - loose, prone to tangling and buckling.`);
+
+  // --- coils <-> rate: whichever is missing comes from the other.
+  let Na = num(s.activeCoils), Nt = num(s.totalCoils), k = num(s.rate_Npmm);
+  if (Na == null && Nt != null) { Na = activeFromTotal(Nt, s.endsKey); derived.push('activeCoils'); }
+  if (Na != null && k == null) {
+    k = rateFromGeometry({ G_GPa: s.G_GPa, d_mm: d, D_mm: s.meanDia_mm, activeCoils: Na });
+    derived.push('rate_Npmm');
+  } else if (Na == null && k != null) {
+    Na = activeCoilsFromRate({ G_GPa: s.G_GPa, d_mm: d, D_mm: s.meanDia_mm, rate_Npmm: k });
+    derived.push('activeCoils');
+  } else if (Na != null && k != null) {
+    // Both published. Cross-check them; a big gap means a bad row.
+    const kCalc = rateFromGeometry({ G_GPa: s.G_GPa, d_mm: d, D_mm: s.meanDia_mm, activeCoils: Na });
+    s.rateCheck = { calculated_Npmm: kCalc, published_Npmm: k, error: (kCalc - k) / k };
+    if (Math.abs(s.rateCheck.error) > 0.25) {
+      warnings.push(`Published rate and coil geometry disagree by ${(s.rateCheck.error * 100).toFixed(0)}% - check the data.`);
+    }
+  }
+  if (Nt == null && Na != null) { Nt = totalFromActive(Na, s.endsKey); derived.push('totalCoils'); }
+  s.activeCoils = Na; s.totalCoils = Nt; s.rate_Npmm = k;
+
+  if (k == null) {
+    return { ...s, derived, warnings, incomplete: true,
+      missing: ['spring rate (or coil count, to derive it)'] };
+  }
+  if (Na != null && Na < 2) warnings.push(`Only ${Na.toFixed(1)} active coils - the rate equation is unreliable this low.`);
+
+  // --- lengths and travel
+  let L0 = num(s.freeLength_mm);
+  let Ls = num(s.solidLength_mm);
+  if (Ls == null && Nt != null) { Ls = solidLength(Nt, d, s.endsKey); derived.push('solidLength_mm'); }
+  s.solidLength_mm = Ls;
+  s.freeLength_mm = L0;
+
+  if (L0 != null && Ls != null) {
+    s.travelToSolid_mm = L0 - Ls;
+    if (s.travelToSolid_mm <= 0) {
+      warnings.push('Derived solid length exceeds free length - the input data is inconsistent.');
+      s.travelToSolid_mm = null;
+    }
+  }
+
+  // Usable travel. Prefer what the vendor rates; otherwise take a fraction of
+  // travel-to-solid, because running a stock spring to solid is where it
+  // takes a set and stops being the spring you specified.
+  const vendorMaxDefl = num(s.maxDeflection_mm);
+  const vendorMaxLoad = num(s.maxLoad_N);
+  if (vendorMaxDefl != null) {
+    s.usableTravel_mm = vendorMaxDefl;
+    s.usableTravelSource = 'vendor max deflection';
+  } else if (vendorMaxLoad != null) {
+    s.usableTravel_mm = vendorMaxLoad / k;
+    s.usableTravelSource = 'vendor max load / rate';
+    derived.push('usableTravel_mm');
+  } else if (s.travelToSolid_mm != null) {
+    s.usableTravel_mm = s.travelToSolid_mm * (s.travelDerate ?? 0.85);
+    s.usableTravelSource = `${((s.travelDerate ?? 0.85) * 100).toFixed(0)}% of travel to solid`;
+    derived.push('usableTravel_mm');
+  } else {
+    s.usableTravel_mm = null;
+    s.usableTravelSource = null;
+  }
+  if (s.usableTravel_mm != null) {
+    s.maxUsableForce_N = k * s.usableTravel_mm;
+    if (L0 != null) s.minWorkingLength_mm = L0 - s.usableTravel_mm;
+  }
+  if (s.travelToSolid_mm != null) s.forceAtSolid_N = k * s.travelToSolid_mm;
+
+  return { ...s, derived, warnings, incomplete: false };
+}
+
+/* -------------------------------------------------------------- evaluation */
+
+/**
+ * Everything you want to know about running one spring at one target force.
+ *
+ * opts:
+ *   targetForce_N      the working load you care about
+ *   positionTol_mm     assembly/travel tolerance at the working point
+ *   rateTol            fractional rate tolerance, default 0.10 (commercial)
+ *   freeLengthTol_mm   only matters if you cannot adjust at assembly
+ *   endCondition       buckling end restraint key
+ *   setRemoved         allow the higher static stress fraction
+ */
+function evaluate(springIn, opts = {}) {
+  const s = springIn.incomplete === undefined ? normalizeSpring(springIn) : springIn;
+  const out = { spring: s, warnings: [...(s.warnings || [])], feasible: false, reasons: [] };
+  if (s.incomplete) {
+    out.reasons.push(`Incomplete data: missing ${s.missing.join(', ')}.`);
+    return out;
+  }
+
+  const {
+    targetForce_N,
+    positionTol_mm = 0.25,
+    rateTol = 0.10,
+    freeLengthTol_mm = 0,
+    endCondition = 'fixed-fixed',
+    setRemoved = false,
+  } = opts;
+
+  const k = s.rate_Npmm;
+  const C = s.springIndex;
+  const Ks = staticShearFactor(C);
+  const Kw = wahlFactor(C);
+  const allow = allowableShearStress(s.materialKey, s.wireDia_mm, { setRemoved });
+  out.allowable = allow;
+  out.factors = { Ks, Kw, springIndex: C };
+
+  const stressAt = (F) => {
+    const tauStatic = shearStress({ force_N: F, D_mm: s.meanDia_mm, d_mm: s.wireDia_mm, factor: Ks });
+    const tauCyclic = shearStress({ force_N: F, D_mm: s.meanDia_mm, d_mm: s.wireDia_mm, factor: Kw });
+    return { tauStatic_MPa: tauStatic, tauCyclic_MPa: tauCyclic, utilisation: tauStatic / allow.tauAllow_MPa };
+  };
+
+  if (s.travelToSolid_mm != null) {
+    out.atSolid = { deflection_mm: s.travelToSolid_mm, force_N: s.forceAtSolid_N, ...stressAt(s.forceAtSolid_N) };
+  }
+  if (s.usableTravel_mm != null) {
+    out.maxUsable = {
+      deflection_mm: s.usableTravel_mm,
+      force_N: s.maxUsableForce_N,
+      length_mm: s.minWorkingLength_mm ?? null,
+      source: s.usableTravelSource,
+      ...stressAt(s.maxUsableForce_N),
+    };
+  }
+
+  if (s.freeLength_mm != null && s.meanDia_mm != null) {
+    out.buckling = bucklingAnalysis({
+      freeLength_mm: s.freeLength_mm, D_mm: s.meanDia_mm,
+      materialKey: s.materialKey, endCondition,
+    });
+    out.buckling.slendernessRatio = s.freeLength_mm / s.meanDia_mm;
+  }
+
+  if (targetForce_N == null) return out;
+
+  const x = deflectionForForce(k, targetForce_N);
+  const stress = stressAt(targetForce_N);
+  const work = {
+    targetForce_N,
+    deflection_mm: x,
+    installedLength_mm: s.freeLength_mm != null ? s.freeLength_mm - x : null,
+    ...stress,
+  };
+  if (s.usableTravel_mm != null) {
+    work.travelUsedFraction = x / s.usableTravel_mm;
+    work.travelHeadroom_mm = s.usableTravel_mm - x;
+  }
+  if (s.travelToSolid_mm != null) work.solidTravelUsedFraction = x / s.travelToSolid_mm;
+
+  // How hard is it to actually hit this force?  dF/dx is the rate itself,
+  // so a stiff spring turns a small assembly error into a big force error.
+  const dx = positionTol_mm + freeLengthTol_mm;
+  const forceErrFromPosition = k * dx;
+  const forceErrFromRate = targetForce_N * rateTol;
+  work.sensitivity = {
+    dFdx_NperMm: k,
+    positionBand_mm: dx,
+    forceErrFromPosition_N: forceErrFromPosition,
+    forceErrFromRate_N: forceErrFromRate,
+    worstCase_N: forceErrFromPosition + forceErrFromRate,
+    rss_N: Math.hypot(forceErrFromPosition, forceErrFromRate),
+    worstCaseFraction: (forceErrFromPosition + forceErrFromRate) / targetForce_N,
+    rssFraction: Math.hypot(forceErrFromPosition, forceErrFromRate) / targetForce_N,
+    forceRange_N: [
+      Math.max(0, targetForce_N - forceErrFromPosition - forceErrFromRate),
+      targetForce_N + forceErrFromPosition + forceErrFromRate,
+    ],
+  };
+  out.working = work;
+
+  // Feasibility
+  const reasons = [];
+  if (x <= 0) reasons.push('Target force is zero or negative.');
+  if (s.usableTravel_mm != null && x > s.usableTravel_mm) {
+    reasons.push(`Needs ${x.toFixed(2)} mm of travel but only ${s.usableTravel_mm.toFixed(2)} mm is usable (${s.usableTravelSource}).`);
+  }
+  if (s.freeLength_mm != null && work.installedLength_mm != null && s.solidLength_mm != null &&
+      work.installedLength_mm < s.solidLength_mm) {
+    reasons.push('Working point is past the solid length - the spring is fully collapsed before it reaches this force.');
+  }
+  if (stress.utilisation > 1) {
+    reasons.push(`Shear stress at the working load is ${(stress.utilisation * 100).toFixed(0)}% of allowable.`);
+  }
+  if (out.buckling && !out.buckling.unconditionallyStable &&
+      out.buckling.criticalDeflection_mm != null && x > out.buckling.criticalDeflection_mm) {
+    out.warnings.push(`Buckles at ${out.buckling.criticalDeflection_mm.toFixed(2)} mm deflection unless guided in a bore or over a rod.`);
+  }
+  out.feasible = reasons.length === 0;
+  out.reasons = reasons;
+  return out;
+}
+
+/* ----------------------------------------------------------- catalog search */
+
+/**
+ * Rank a catalog against a working-point requirement.
+ *
+ * req:
+ *   targetForce_N            required
+ *   forceTolerance           fractional band the force must land in (unused for
+ *                            search since deflection is solved exactly, but
+ *                            kept for the tolerance report), default 0.10
+ *   maxOD_mm, minOD_mm, minID_mm, maxFreeLength_mm, minFreeLength_mm
+ *   maxInstalledLength_mm    envelope at the working point
+ *   maxSolidLength_mm
+ *   materials                array of material keys to allow
+ *   minTravelHeadroom_mm     insist on this much unused travel
+ *   maxTravelUsedFraction    e.g. 0.8 -- do not sit near the travel limit
+ *   sortBy                   'robustness' | 'travel' | 'compact' | 'rate' | 'force-precision'
+ */
+function searchCatalog(springs, req = {}) {
+  const {
+    targetForce_N,
+    maxOD_mm = null, minOD_mm = null, minID_mm = null,
+    maxFreeLength_mm = null, minFreeLength_mm = null,
+    maxInstalledLength_mm = null, maxSolidLength_mm = null,
+    materials = null,
+    minTravelHeadroom_mm = 0,
+    maxTravelUsedFraction = 1,
+    sortBy = 'robustness',
+    includeRejected = false,
+    ...evalOpts
+  } = req;
+
+  const results = [];
+  for (const raw of springs) {
+    const s = raw.incomplete === undefined ? normalizeSpring(raw) : raw;
+    const rejected = [];
+
+    if (s.incomplete) rejected.push(`Incomplete data: missing ${s.missing.join(', ')}.`);
+    if (maxOD_mm != null && s.od_mm != null && s.od_mm > maxOD_mm + 1e-9) rejected.push(`OD ${s.od_mm.toFixed(2)} mm exceeds ${maxOD_mm.toFixed(2)} mm.`);
+    if (minOD_mm != null && s.od_mm != null && s.od_mm < minOD_mm) rejected.push(`OD below minimum.`);
+    if (minID_mm != null && s.id_mm != null && s.id_mm < minID_mm) rejected.push(`ID ${s.id_mm.toFixed(2)} mm will not clear a ${minID_mm.toFixed(2)} mm rod.`);
+    if (maxFreeLength_mm != null && s.freeLength_mm != null && s.freeLength_mm > maxFreeLength_mm) rejected.push('Free length too long.');
+    if (minFreeLength_mm != null && s.freeLength_mm != null && s.freeLength_mm < minFreeLength_mm) rejected.push('Free length too short.');
+    if (maxSolidLength_mm != null && s.solidLength_mm != null && s.solidLength_mm > maxSolidLength_mm) rejected.push('Solid length too long.');
+    if (materials && materials.length && !materials.includes(s.materialKey)) rejected.push('Material excluded.');
+
+    const ev = evaluate(s, { targetForce_N, ...evalOpts });
+    if (!ev.feasible) rejected.push(...ev.reasons);
+    if (ev.working) {
+      if (ev.working.travelHeadroom_mm != null && ev.working.travelHeadroom_mm < minTravelHeadroom_mm) {
+        rejected.push(`Only ${ev.working.travelHeadroom_mm.toFixed(2)} mm of travel left past the working point.`);
+      }
+      if (ev.working.travelUsedFraction != null && ev.working.travelUsedFraction > maxTravelUsedFraction) {
+        rejected.push(`Uses ${(ev.working.travelUsedFraction * 100).toFixed(0)}% of usable travel.`);
+      }
+      if (maxInstalledLength_mm != null && ev.working.installedLength_mm != null &&
+          ev.working.installedLength_mm > maxInstalledLength_mm) {
+        rejected.push('Installed length exceeds the envelope.');
+      }
+    }
+
+    const entry = { spring: s, evaluation: ev, ok: rejected.length === 0, rejected };
+    if (entry.ok || includeRejected) results.push(entry);
+  }
+
+  const scored = results.map((r) => ({ ...r, score: scoreResult(r, sortBy) }));
+  scored.sort((a, b) => {
+    if (a.ok !== b.ok) return a.ok ? -1 : 1;
+    return b.score - a.score;
+  });
+  return scored;
+}
+
+function scoreResult(r, sortBy) {
+  const w = r.evaluation.working;
+  const s = r.spring;
+  if (!w) return -Infinity;
+  switch (sortBy) {
+    case 'travel':
+      return w.travelHeadroom_mm ?? 0;
+    case 'compact':
+      return -((s.od_mm ?? 0) * (w.installedLength_mm ?? s.freeLength_mm ?? 0));
+    case 'rate':
+      return -(s.rate_Npmm ?? Infinity);
+    case 'force-precision':
+      return -(w.sensitivity?.rssFraction ?? Infinity);
+    case 'robustness':
+    default: {
+      // Favour a working point that sits mid-travel with low force sensitivity
+      // and comfortable stress -- the spring you can actually build around.
+      const sens = w.sensitivity?.rssFraction ?? 1;
+      const used = w.travelUsedFraction ?? 0.5;
+      const midTravel = 1 - Math.abs(used - 0.45) / 0.55; // 1 at 45% of travel
+      const stressMargin = 1 - Math.min(w.utilisation ?? 0.5, 1);
+      return 0.5 * (1 - Math.min(sens, 1)) + 0.35 * Math.max(midTravel, 0) + 0.15 * stressMargin;
+    }
+  }
+}
+
+/* ---------------------------------------------------- catalog-free design */
+
+/** Music wire / spring wire diameters commonly stocked, inches. */
+const STANDARD_WIRE_DIA_IN = [
+  0.004, 0.005, 0.006, 0.007, 0.008, 0.009, 0.010, 0.011, 0.012, 0.013, 0.014,
+  0.015, 0.016, 0.017, 0.018, 0.019, 0.020, 0.022, 0.024, 0.026, 0.028, 0.029,
+  0.030, 0.031, 0.032, 0.033, 0.034, 0.035, 0.036, 0.038, 0.040, 0.041, 0.043,
+  0.045, 0.047, 0.048, 0.051, 0.055, 0.059, 0.063, 0.067, 0.072, 0.076, 0.080,
+  0.085, 0.090, 0.095, 0.100, 0.106, 0.112, 0.118, 0.125,
+];
+
+/**
+ * What should you even be shopping for?
+ *
+ * Given a target force and an OD ceiling, sweep working deflection and report
+ * the spring rate window that lands the force there, plus a buildable
+ * geometry at each point. This is what you type into a vendor's rate filter
+ * before you have any catalog data at all.
+ */
+function designSpace({
+  targetForce_N,
+  maxOD_mm,
+  deflectionRange_mm = [1.27, 12.7], // 0.05" .. 0.5"
+  steps = 8,
+  materialKey = DEFAULT_MATERIAL,
+  endsKey = DEFAULT_ENDS,
+  minIndex = 4,
+  maxIndex = 16,
+  minActiveCoils = 3,
+  solidStressLimit = 1.0,
+}) {
+  const mat = getMaterial(materialKey);
+  const [xMin, xMax] = deflectionRange_mm;
+  const points = [];
+  for (let i = 0; i < steps; i++) {
+    const t = steps === 1 ? 0 : i / (steps - 1);
+    const x = xMin * Math.pow(xMax / xMin, t); // log spacing
+    const k = targetForce_N / x;
+    const options = [];
+    for (const dIn of STANDARD_WIRE_DIA_IN) {
+      const d = inToMm(dIn);
+      const D = maxOD_mm - d;
+      if (D <= 0) continue;
+      const C = D / d;
+      if (C < minIndex || C > maxIndex) continue;
+      const Na = activeCoilsFromRate({ G_GPa: mat.G_GPa, d_mm: d, D_mm: D, rate_Npmm: k });
+      if (!Number.isFinite(Na) || Na < minActiveCoils) continue;
+      const Nt = totalFromActive(Na, endsKey);
+      const Ls = solidLength(Nt, d, endsKey);
+      const travelToSolid = x / 0.85; // put the working point at 85% of usable
+      const L0 = Ls + travelToSolid;
+      const allow = allowableShearStress(materialKey, d);
+      const Ks = staticShearFactor(C);
+      const tauWork = shearStress({ force_N: targetForce_N, D_mm: D, d_mm: d, factor: Ks });
+      const forceAtSolidN = k * (L0 - Ls);
+      const tauSolid = shearStress({ force_N: forceAtSolidN, D_mm: D, d_mm: d, factor: Ks });
+      if (tauSolid / allow.tauAllow_MPa > solidStressLimit) continue;
+      options.push({
+        wireDia_mm: d, wireDia_in: dIn, meanDia_mm: D, od_mm: maxOD_mm,
+        springIndex: C, activeCoils: Na, totalCoils: Nt,
+        solidLength_mm: Ls, minFreeLength_mm: L0,
+        stressUtilisationAtWork: tauWork / allow.tauAllow_MPa,
+        stressUtilisationAtSolid: tauSolid / allow.tauAllow_MPa,
+      });
+    }
+    // Fewest coils wins: for a light spring in a small bore, thin wire beats
+    // "textbook" index 8 by an order of magnitude in length.
+    options.sort((a, b) => a.minFreeLength_mm - b.minFreeLength_mm);
+    points.push({ deflection_mm: x, rate_Npmm: k, options });
+  }
+  return {
+    targetForce_N, maxOD_mm, materialKey,
+    rateWindow_Npmm: [targetForce_N / xMax, targetForce_N / xMin],
+    points,
+  };
+}
+
+return { IN_TO_MM, LBF_TO_N, PSI_TO_MPA, LBF_PER_IN_TO_N_PER_MM, inToMm, mmToIn, lbfToN, nToLbf, lbfPerInToNPerMm, nPerMmToLbfPerIn, psiToMpa, mpaToPsi, MATERIALS, DEFAULT_MATERIAL, resolveMaterial, getMaterial, ultimateTensileStrength, allowableShearStress, END_TYPES, DEFAULT_ENDS, resolveEnds, getEnds, activeFromTotal, totalFromActive, solidLength, meanDiameter, springIndex, rateFromGeometry, activeCoilsFromRate, wahlFactor, staticShearFactor, shearStress, forceAtDeflection, deflectionForForce, forceAtLength, lengthForForce, END_CONDITIONS, bucklingAnalysis, normalizeSpring, evaluate, searchCatalog, STANDARD_WIRE_DIA_IN, designSpace };
+})();
+
+const cat = (() => {
+const { inToMm, lbfToN, lbfPerInToNPerMm, resolveMaterial, resolveEnds, normalizeSpring, MATERIALS, END_TYPES } = sm;
+/**
+ * catalog.js -- get real vendor data into the engine.
+ *
+ * The point of this file is that nobody should be retyping spring specs.
+ * McMaster (and Lee, Century, MISUMI, Associated) all render their catalogue
+ * as an HTML table; select it, copy, paste it in here and this parses the
+ * tab-separated clipboard payload into normalised SI spring objects.
+ *
+ * It also reads CSV, and it is deliberately forgiving about the ways vendors
+ * write numbers: 0.36", .36, 3/8", 1-1/2", 12.7 mm, "4.5 lbs./in.", "1.5 N".
+ */
+
+
+/* ---------------------------------------------------------- value parsing */
+
+const FRACTION = /^(\d+)?[\s-]*(\d+)\s*\/\s*(\d+)$/;
+
+/** "1-1/2" -> 1.5, "3/8" -> 0.375, ".36" -> 0.36 */
+function parseNumber(text) {
+  if (text == null) return null;
+  let t = String(text).trim().replace(/,/g, '');
+  if (!t) return null;
+  const frac = t.match(FRACTION);
+  if (frac) {
+    const whole = frac[1] ? parseInt(frac[1], 10) : 0;
+    const n = parseInt(frac[2], 10);
+    const dnm = parseInt(frac[3], 10);
+    if (!dnm) return null;
+    return whole + n / dnm;
+  }
+  const m = t.match(/-?\d*\.?\d+(?:[eE][-+]?\d+)?/);
+  if (!m) return null;
+  const v = parseFloat(m[0]);
+  return Number.isFinite(v) ? v : null;
+}
+
+/**
+ * Pull a unit out of a string. Checks longest/most specific first so that
+ * "lbs./in." is a rate and not a force, and "in" is not found inside "Inconel".
+ */
+function detectUnit(text) {
+  if (!text) return null;
+  const t = String(text).toLowerCase();
+  if (/n\s*\/\s*mm/.test(t)) return 'N/mm';
+  if (/(lbs?f?|pounds?)\s*\.?\s*\/\s*(in|inch)/.test(t)) return 'lbf/in';
+  if (/n\s*\/\s*m\b/.test(t)) return 'N/m';
+  if (/\bkgf?\s*\/\s*mm/.test(t)) return 'kgf/mm';
+  // A trailing unit may be glued to the number ("12.7mm", "0.5in", "1.5N"),
+  // so match the suffix as well as the standalone word.
+  if (/mm\b|millimet/.test(t)) return 'mm';
+  if (/["”]|inch(es)?\b|(?:^|[\d\s.])in\.?\s*$|\bin\b(?!con)/.test(t)) return 'in';
+  if (/lbs?f?\b|pounds?\b/.test(t)) return 'lbf';
+  if (/(?:^|[\d\s.])ozf?\b|ounces?\b/.test(t)) return 'ozf';
+  if (/(?:^|[\d\s.])kgf?\b|kilogram/.test(t)) return 'kgf';
+  if (/(?:^|[\d\s.])gf\b|gram(s|-force)?\b/.test(t)) return 'gf';
+  if (/(?:^|[\d\s.])n\.?\s*$|newton/.test(t)) return 'N';
+  return null;
+}
+
+const LENGTH_TO_MM = { mm: 1, cm: 10, m: 1000, in: 25.4 };
+const FORCE_TO_N = {
+  N: 1, kN: 1000, lbf: 4.4482216152605, ozf: 0.2780138509,
+  kgf: 9.80665, gf: 0.00980665,
+};
+const RATE_TO_N_PER_MM = {
+  'N/mm': 1, 'N/m': 0.001, 'lbf/in': lbfPerInToNPerMm(1), 'kgf/mm': 9.80665,
+};
+
+/** value + unit -> mm.  `fallbackUnit` is used when the cell carries none. */
+function toMm(text, fallbackUnit = 'in') {
+  const v = parseNumber(text);
+  if (v == null) return null;
+  const u = detectUnit(text) || fallbackUnit;
+  const f = LENGTH_TO_MM[u];
+  return f == null ? null : v * f;
+}
+
+function toNewtons(text, fallbackUnit = 'lbf') {
+  const v = parseNumber(text);
+  if (v == null) return null;
+  const u = detectUnit(text) || fallbackUnit;
+  const f = FORCE_TO_N[u];
+  return f == null ? null : v * f;
+}
+
+function toNewtonsPerMm(text, fallbackUnit = 'lbf/in') {
+  const v = parseNumber(text);
+  if (v == null) return null;
+  const u = detectUnit(text) || fallbackUnit;
+  const f = RATE_TO_N_PER_MM[u];
+  return f == null ? null : v * f;
+}
+
+/* --------------------------------------------------------- column mapping */
+
+/**
+ * Vendor header text -> canonical field. Patterns are tested in order, so put
+ * the specific ones (inside diameter, solid length) above the generic ones
+ * (diameter, length).
+ */
+const COLUMN_PATTERNS = [
+  ['partNumber', /part\s*(#|no|num|number)|^part$|item\s*(#|no)|catalog|mcmaster|sku|model/],
+  ['url', /^(url|link|href)$/],
+  ['wireDia', /wire\s*(dia|diameter|size|gauge|ga\b)|^wire$/],
+  ['id', /\b(id|i\.d\.)\b|inside\s*(dia|diameter)|inner\s*(dia|diameter)|bore/],
+  ['forRodDia', /for\s*rod|rod\s*dia|over\s*rod|shaft\s*dia/],
+  ['forHoleDia', /for\s*hole|in\s*hole|hole\s*dia|bore\s*dia/],
+  ['od', /\b(od|o\.d\.)\b|outside\s*(dia|diameter)|outer\s*(dia|diameter)|^dia(meter)?\.?$/],
+  ['solidLength', /solid\s*(length|lg|height|ht)|compressed\s*(length|lg)|closed\s*(length|lg|height)/],
+  ['maxDeflection', /max.*(deflect|travel|compress|stroke)|(deflect|travel|stroke).*max|working\s*(travel|stroke)/],
+  ['maxLoad', /max.*(load|force)|(load|force).*max|rated\s*(load|force)|load\s*@|load\s*at/],
+  ['freeLength', /free\s*(length|lg|ht|height)|overall\s*(length|lg)|^(length|lg|lg\.|ht)\.?$|uncompressed/],
+  ['rate', /spring\s*rate|^rate\b|load\s*rate|lbs?\.?\s*\/\s*in|n\s*\/\s*mm|stiffness/],
+  ['totalCoils', /total\s*coils|^coils?$|number\s*of\s*coils/],
+  ['activeCoils', /active\s*coils/],
+  ['material', /material|\balloy\b|^made\s*of/],
+  ['finish', /finish|plating|coating/],
+  ['ends', /\bends?\b|end\s*type|end\s*style/],
+  ['packQty', /pack|qty|quantity|each\s*pack|per\s*pack/],
+  ['price', /price|each|\$|cost/],
+];
+
+function mapHeader(headerCells) {
+  const mapping = [];
+  const used = new Set();
+  headerCells.forEach((cell, i) => {
+    const h = String(cell || '').toLowerCase().trim();
+    let field = null;
+    for (const [name, re] of COLUMN_PATTERNS) {
+      if (re.test(h) && !used.has(name)) { field = name; break; }
+    }
+    if (field) used.add(field);
+    mapping.push({ index: i, header: cell, field, unit: detectUnit(h) });
+  });
+  return mapping;
+}
+
+/* ----------------------------------------------------------- table parsing */
+
+function splitRow(line) {
+  if (line.includes('\t')) return line.split('\t');
+  // Quote-aware CSV, falling back to 2+ spaces for pasted fixed-width text.
+  if (line.includes(',')) {
+    const out = [];
+    let cur = '';
+    let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQ && line[i + 1] === '"') { cur += '"'; i++; } else inQ = !inQ;
+      } else if (ch === ',' && !inQ) { out.push(cur); cur = ''; } else cur += ch;
+    }
+    out.push(cur);
+    return out;
+  }
+  return line.split(/\s{2,}/);
+}
+
+const looksLikeHeader = (cells) =>
+  cells.some((c) => /[a-z]{3,}/i.test(String(c))) &&
+  cells.filter((c) => parseNumber(c) != null).length < cells.length / 2;
+
+/**
+ * Parse a pasted table into rows keyed by canonical field name.
+ * Returns { mapping, rows, skipped, unmapped }.
+ */
+function parseTable(text, { columns = null } = {}) {
+  const lines = String(text).replace(/\r\n?/g, '\n').split('\n')
+    .map((l) => l.trimEnd()).filter((l) => l.trim() !== '');
+  if (!lines.length) return { mapping: [], rows: [], skipped: [], unmapped: [] };
+
+  let mapping;
+  let start = 0;
+  const first = splitRow(lines[0]).map((c) => c.trim());
+  if (columns) {
+    mapping = columns.map((field, i) => ({ index: i, header: field, field, unit: null }));
+    if (looksLikeHeader(first)) start = 1;
+  } else if (looksLikeHeader(first)) {
+    mapping = mapHeader(first);
+    start = 1;
+  } else {
+    return {
+      mapping: [], rows: [], skipped: lines,
+      unmapped: [],
+      error: 'No header row found. Include the vendor’s header line, or pass an explicit column list.',
+    };
+  }
+
+  const rows = [];
+  const skipped = [];
+  for (let i = start; i < lines.length; i++) {
+    const cells = splitRow(lines[i]).map((c) => c.trim());
+    // McMaster tables carry section banners and footnotes as single-cell rows.
+    if (cells.filter((c) => c !== '').length < 2) { skipped.push(lines[i]); continue; }
+    const row = { _raw: lines[i] };
+    mapping.forEach((m) => {
+      if (!m.field) return;
+      const v = cells[m.index];
+      if (v == null || v === '') return;
+      row[m.field] = v;
+      if (m.unit) row[`${m.field}_headerUnit`] = m.unit;
+    });
+    if (Object.keys(row).length <= 1) { skipped.push(lines[i]); continue; }
+    rows.push(row);
+  }
+  const unmapped = mapping.filter((m) => !m.field && String(m.header || '').trim() !== '');
+  return { mapping, rows, skipped, unmapped };
+}
+
+/* ------------------------------------------------------- rows -> springs */
+
+/**
+ * Convert parsed rows to normalised SI springs.
+ *
+ * opts.lengthUnit / forceUnit / rateUnit are the fallbacks for cells that do
+ * not spell out their own unit -- McMaster's US tables are in inches and
+ * lbs./in., its metric tables in mm and N/mm.
+ */
+function rowsToSprings(rows, opts = {}) {
+  const {
+    lengthUnit = 'in', forceUnit = 'lbf', rateUnit = 'lbf/in',
+    vendor = 'McMaster-Carr', urlTemplate = 'https://www.mcmaster.com/{part}/',
+    defaultMaterial = null, defaultEnds = null, source = null,
+  } = opts;
+
+  return rows.map((row, i) => {
+    const lu = row.od_headerUnit === 'mm' || row.freeLength_headerUnit === 'mm' ? 'mm' : lengthUnit;
+    const ru = row.rate_headerUnit || rateUnit;
+    const fu = row.maxLoad_headerUnit || forceUnit;
+
+    const part = row.partNumber ? String(row.partNumber).replace(/\s+/g, '') : null;
+    const materialText = [row.material, row.finish].filter(Boolean).join(' ');
+    const raw = {
+      partNumber: part,
+      vendor,
+      url: row.url || (part && urlTemplate ? urlTemplate.replace('{part}', encodeURIComponent(part)) : null),
+      type: 'compression',
+      material: materialText || defaultMaterial,
+      materialKey: resolveMaterial(materialText) || (defaultMaterial ? resolveMaterial(defaultMaterial) : null) || undefined,
+      ends: row.ends || defaultEnds,
+      endsKey: resolveEnds(row.ends) || (defaultEnds ? resolveEnds(defaultEnds) : null) || undefined,
+      od_mm: toMm(row.od, lu),
+      id_mm: toMm(row.id, lu),
+      wireDia_mm: toMm(row.wireDia, lu),
+      freeLength_mm: toMm(row.freeLength, lu),
+      solidLength_mm: toMm(row.solidLength, lu),
+      maxDeflection_mm: toMm(row.maxDeflection, lu),
+      rate_Npmm: toNewtonsPerMm(row.rate, ru),
+      maxLoad_N: toNewtons(row.maxLoad, fu),
+      totalCoils: parseNumber(row.totalCoils),
+      activeCoils: parseNumber(row.activeCoils),
+      forRodDia_mm: toMm(row.forRodDia, lu),
+      forHoleDia_mm: toMm(row.forHoleDia, lu),
+      packQty: parseNumber(row.packQty),
+      price: row.price || null,
+      source: source || `pasted table row ${i + 1}`,
+      provenance: 'vendor-table-import',
+    };
+    Object.keys(raw).forEach((k) => { if (raw[k] === undefined) delete raw[k]; });
+    return normalizeSpring(raw);
+  });
+}
+
+/** One-call convenience: paste text in, normalised springs out. */
+function importTable(text, opts = {}) {
+  const parsed = parseTable(text, opts);
+  if (parsed.error) return { ...parsed, springs: [] };
+  const springs = rowsToSprings(parsed.rows, opts);
+  return { ...parsed, springs };
+}
+
+/* ------------------------------------------------------------- hand entry */
+
+/** Build a spring from a units-tagged form object (the "add one" UI path). */
+function springFromForm(f) {
+  const L = (v) => (v === '' || v == null ? null : toMm(String(v), f.lengthUnit || 'in'));
+  const raw = {
+    partNumber: f.partNumber || null,
+    vendor: f.vendor || null,
+    url: f.url || null,
+    type: 'compression',
+    materialKey: f.materialKey || undefined,
+    endsKey: f.endsKey || undefined,
+    od_mm: L(f.od), id_mm: L(f.id), wireDia_mm: L(f.wireDia),
+    freeLength_mm: L(f.freeLength), solidLength_mm: L(f.solidLength),
+    maxDeflection_mm: L(f.maxDeflection),
+    rate_Npmm: f.rate === '' || f.rate == null ? null
+      : toNewtonsPerMm(String(f.rate), f.rateUnit || 'lbf/in'),
+    maxLoad_N: f.maxLoad === '' || f.maxLoad == null ? null
+      : toNewtons(String(f.maxLoad), f.forceUnit || 'lbf'),
+    totalCoils: f.totalCoils === '' || f.totalCoils == null ? null : parseNumber(String(f.totalCoils)),
+    activeCoils: f.activeCoils === '' || f.activeCoils == null ? null : parseNumber(String(f.activeCoils)),
+    provenance: 'hand-entered',
+  };
+  Object.keys(raw).forEach((k) => { if (raw[k] === undefined) delete raw[k]; });
+  return normalizeSpring(raw);
+}
+
+/* ------------------------------------------------------------ persistence */
+
+const CATALOG_VERSION = 1;
+
+function toCatalogJson(springs, meta = {}) {
+  return {
+    version: CATALOG_VERSION,
+    generated: new Date().toISOString(),
+    units: 'SI (mm, N, N/mm)',
+    ...meta,
+    springs: springs.map(stripDerived),
+  };
+}
+
+/** Keep only what was actually supplied, so a reload re-derives cleanly. */
+function stripDerived(s) {
+  const drop = new Set([...(s.derived || []), 'warnings', 'derived', 'incomplete', 'missing',
+    'meanDia_mm', 'springIndex', 'travelToSolid_mm', 'usableTravel_mm', 'usableTravelSource',
+    'maxUsableForce_N', 'minWorkingLength_mm', 'forceAtSolid_N', 'rateCheck', 'G_GPa']);
+  const out = {};
+  for (const [k, v] of Object.entries(s)) {
+    if (drop.has(k) || v == null) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+function fromCatalogJson(json) {
+  const data = typeof json === 'string' ? JSON.parse(json) : json;
+  const list = Array.isArray(data) ? data : data.springs || [];
+  return list.map((s) => normalizeSpring(s));
+}
+
+const MATERIAL_OPTIONS = Object.entries(MATERIALS).map(([key, m]) => ({ key, name: m.name }));
+const END_OPTIONS = Object.entries(END_TYPES).map(([key, e]) => ({ key, name: e.name }));
+
+return { parseNumber, detectUnit, toMm, toNewtons, toNewtonsPerMm, mapHeader, parseTable, rowsToSprings, importTable, springFromForm, toCatalogJson, fromCatalogJson, MATERIAL_OPTIONS, END_OPTIONS };
+})();
+
+/**
+ * app.js -- browser front end for the spring calculator.
+ * All the physics lives in spring-math.js; this file is display and plumbing.
+ */
+
+
+const $ = (id) => document.getElementById(id);
+const STORE_KEY = 'springcalc.catalog.v1';
+
+const state = {
+  lengthUnit: 'in',
+  catalogue: [],
+  results: [],
+  selected: null,
+};
+
+/* ---------------------------------------------------------------- format */
+
+const nf = (v, n) => (v == null || !Number.isFinite(v) ? '—' : v.toFixed(n));
+const pct = (x) => (x == null || !Number.isFinite(x) ? '—' : `${Math.round(x * 100)}%`);
+
+/** Length in the unit the user is working in. */
+function L(mm, { both = false } = {}) {
+  if (mm == null || !Number.isFinite(mm)) return '—';
+  const inch = state.lengthUnit === 'in';
+  const main = inch ? `${nf(sm.mmToIn(mm), 3)} in` : `${nf(mm, 2)} mm`;
+  if (!both) return main;
+  return `${main} (${inch ? `${nf(mm, 2)} mm` : `${nf(sm.mmToIn(mm), 3)} in`})`;
+}
+const Lnum = (mm) => (mm == null ? '—' : state.lengthUnit === 'in' ? nf(sm.mmToIn(mm), 3) : nf(mm, 2));
+const Lunit = () => (state.lengthUnit === 'in' ? 'in' : 'mm');
+
+function F(N, { both = false } = {}) {
+  if (N == null || !Number.isFinite(N)) return '—';
+  const main = `${nf(N, 3)} N`;
+  return both ? `${main} (${nf(sm.nToLbf(N), 3)} lbf)` : main;
+}
+function K(k, { both = true } = {}) {
+  if (k == null || !Number.isFinite(k)) return '—';
+  const si = `${nf(k, 4)} N/mm`;
+  const us = `${nf(sm.nPerMmToLbfPerIn(k), 2)} lbf/in`;
+  return state.lengthUnit === 'in' ? (both ? `${us} (${si})` : us) : (both ? `${si} (${us})` : si);
+}
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+/** Read a numeric input, returning null when blank. */
+const rawNum = (id) => { const v = $(id).value.trim(); return v === '' ? null : Number(v); };
+/** Read a length input in the active display unit, as mm. */
+const readLen = (id) => { const v = rawNum(id); return v == null ? null : (state.lengthUnit === 'in' ? sm.inToMm(v) : v); };
+const readForce = (id, unitId) => {
+  const v = rawNum(id);
+  if (v == null) return null;
+  return cat.toNewtons(`${v} ${$(unitId).value}`, 'N');
+};
+
+/* ------------------------------------------------------------------ tabs */
+
+document.querySelectorAll('nav.tabs button').forEach((b) => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('nav.tabs button').forEach((x) => x.setAttribute('aria-selected', String(x === b)));
+    document.querySelectorAll('.panel').forEach((p) => { p.hidden = p.id !== `tab-${b.dataset.tab}`; });
+  });
+});
+
+/* -------------------------------------------------------------- storage */
+
+function loadStore() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) state.catalogue = cat.fromCatalogJson(raw);
+  } catch (e) { /* private mode, corrupt payload -- start empty */ }
+}
+function saveStore() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(cat.toCatalogJson(state.catalogue))); }
+  catch (e) { /* over quota or blocked; the session still works */ }
+}
+
+/* ------------------------------------------------------- select options */
+
+function fillSelect(sel, opts, { blank = null } = {}) {
+  sel.innerHTML = '';
+  if (blank) sel.append(new Option(blank, ''));
+  opts.forEach((o) => sel.append(new Option(o.name, o.key)));
+}
+fillSelect($('f-material'), cat.MATERIAL_OPTIONS, { blank: 'any' });
+fillSelect($('a-material'), cat.MATERIAL_OPTIONS);
+fillSelect($('a-ends'), cat.END_OPTIONS);
+fillSelect($('a-endcond'), Object.entries(sm.END_CONDITIONS).map(([key, v]) => ({ key, name: v.name })));
+
+/* --------------------------------------------------------- shared report */
+
+function badge(kind, text) { return `<span class="pill ${kind}">${esc(text)}</span>`; }
+
+function severity(fraction) {
+  if (fraction == null) return 'ok';
+  if (fraction > 0.95) return 'bad';
+  if (fraction > 0.75) return 'warn';
+  return 'ok';
+}
+
+function specList(s) {
+  const d = (f) => (s.derived.includes(f) ? ' <span class="derived">derived</span>' : '');
+  return `<dl class="specs">
+    <dt>material</dt><dd>${esc(sm.getMaterial(s.materialKey).name)}</dd>
+    <dt>ends</dt><dd>${esc(sm.getEnds(s.endsKey).name)}${d('endsKey')}</dd>
+    <dt>OD / ID</dt><dd>${L(s.od_mm)} / ${L(s.id_mm)}${d('id_mm')}</dd>
+    <dt>wire</dt><dd>${L(s.wireDia_mm)}${d('wireDia_mm')}</dd>
+    <dt>mean dia</dt><dd>${L(s.meanDia_mm)}, index C = ${nf(s.springIndex, 1)}</dd>
+    <dt>free length</dt><dd>${L(s.freeLength_mm)}</dd>
+    <dt>solid length</dt><dd>${L(s.solidLength_mm)}${d('solidLength_mm')}</dd>
+    <dt>active coils</dt><dd>${nf(s.activeCoils, 1)}${d('activeCoils')}</dd>
+    <dt>rate</dt><dd>${K(s.rate_Npmm)}${d('rate_Npmm')}</dd>
+    <dt>travel to solid</dt><dd>${L(s.travelToSolid_mm)}</dd>
+    <dt>usable travel</dt><dd>${L(s.usableTravel_mm)} <span class="derived">${esc(s.usableTravelSource || '')}</span></dd>
+    <dt>max usable load</dt><dd>${F(s.maxUsableForce_N, { both: true })}</dd>
+  </dl>`;
+}
+
+function workingList(ev) {
+  const w = ev.working;
+  if (!w) return '';
+  const sen = w.sensitivity;
+  return `<dl class="specs">
+    <dt>force</dt><dd>${F(w.targetForce_N, { both: true })}</dd>
+    <dt>compress by</dt><dd>${L(w.deflection_mm, { both: true })}</dd>
+    <dt>installed length</dt><dd>${L(w.installedLength_mm, { both: true })}</dd>
+    <dt>travel used</dt><dd>${pct(w.travelUsedFraction)} of usable, ${L(w.travelHeadroom_mm)} spare</dd>
+    <dt>shear stress</dt><dd>${nf(w.tauStatic_MPa, 0)} MPa = ${pct(w.utilisation)} of allowable</dd>
+    <dt>force you get</dt><dd>${F(sen.forceRange_N[0])} to ${F(sen.forceRange_N[1])}</dd>
+    <dt></dt><dd class="muted">&plusmn;${pct(sen.worstCaseFraction)} worst case, &plusmn;${pct(sen.rssFraction)} RSS</dd>
+    <dt>from position</dt><dd>${nf(sen.forceErrFromPosition_N, 3)} N per &plusmn;${L(sen.positionBand_mm)}</dd>
+    <dt>from rate tol</dt><dd>${nf(sen.forceErrFromRate_N, 3)} N</dd>
+  </dl>`;
+}
+
+function renderReport(s, ev) {
+  const w = ev.working;
+  const verdict = !w ? '' : !ev.feasible
+    ? badge('bad', 'will not reach this force')
+    : (w.travelUsedFraction ?? 0) > 0.95 ? badge('warn', 'works, no travel margin')
+      : (w.travelUsedFraction ?? 0) > 0.75 ? badge('warn', 'works, tight on travel')
+        : badge('ok', 'works');
+  const notes = [...ev.warnings, ...(ev.feasible ? [] : ev.reasons)];
+  const buck = ev.buckling
+    ? (ev.buckling.unconditionallyStable
+      ? 'Stable at any deflection &mdash; too stubby to buckle.'
+      : `Buckles past ${L(ev.buckling.criticalDeflection_mm)} of deflection unless it runs in a bore or over a rod.`)
+    : '';
+
+  return `<div class="card">
+    <h2>${esc(s.partNumber || 'Spring')} ${verdict}</h2>
+    ${s.url ? `<p class="hint" style="margin-top:-8px"><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.url)}</a></p>` : ''}
+    <div class="cols">
+      <div><h3 style="margin-top:0">The spring</h3>${specList(s)}</div>
+      <div><h3 style="margin-top:0">At your working point</h3>${workingList(ev)}</div>
+    </div>
+    <div id="viz-slot"></div>
+    ${buck ? `<p class="hint">${buck}</p>` : ''}
+    ${notes.length ? `<ul class="notes">${notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}
+  </div>`;
+}
+
+/* ------------------------------------------------------------- travel meter
+ * A meter, not a chart: one span (free length down to solid), the working
+ * point sitting somewhere along it. Fill colour carries severity.
+ */
+function travelMeter(s, ev) {
+  const w = ev.working;
+  if (s.freeLength_mm == null || s.solidLength_mm == null || !w) return '';
+  const W = 720, H = 92, pad = 14;
+  const x0 = pad, x1 = W - pad;
+  const total = s.freeLength_mm;
+  const px = (mm) => x0 + (mm / total) * (x1 - x0);
+  const barY = 34, barH = 18, r = 4;
+
+  const instX = px(w.installedLength_mm);
+  const solidX = px(s.solidLength_mm);
+  const usableX = s.minWorkingLength_mm != null ? px(s.minWorkingLength_mm) : null;
+  const sev = severity(w.travelUsedFraction);
+  const fillColor = `var(--${sev === 'ok' ? 'accent' : sev})`;
+
+  // Track is the free spring; the fill is the part you compress away.
+  return `<figure>
+  <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Travel from free length to solid, with the working point marked">
+    <rect x="${x0}" y="${barY}" width="${x1 - x0}" height="${barH}" rx="${r}" fill="var(--accent-soft)"/>
+    <rect x="${instX + 2}" y="${barY}" width="${Math.max(x1 - instX - 2, 0)}" height="${barH}" rx="${r}" fill="${fillColor}" opacity="0.85"/>
+    <rect x="${x0}" y="${barY}" width="${Math.max(solidX - x0, 0)}" height="${barH}" rx="${r}" fill="var(--line)"/>
+    ${usableX != null ? `<line x1="${usableX}" y1="${barY - 5}" x2="${usableX}" y2="${barY + barH + 5}" stroke="var(--warn)" stroke-width="1"/>` : ''}
+    <line x1="${instX}" y1="${barY - 9}" x2="${instX}" y2="${barY + barH + 9}" stroke="var(--ink)" stroke-width="2"/>
+    <circle cx="${instX}" cy="${barY + barH / 2}" r="5" fill="var(--ink)" stroke="var(--panel)" stroke-width="2"/>
+    <text x="${x0}" y="${barY - 12}" font-size="11" fill="var(--muted)">solid ${esc(Lnum(s.solidLength_mm))}</text>
+    <text x="${x1}" y="${barY - 12}" font-size="11" fill="var(--muted)" text-anchor="end">free ${esc(Lnum(s.freeLength_mm))}</text>
+    <text x="${instX}" y="${barY + barH + 24}" font-size="12" fill="var(--ink)" text-anchor="${instX > W * 0.8 ? 'end' : instX < W * 0.2 ? 'start' : 'middle'}">
+      installed ${esc(Lnum(w.installedLength_mm))} ${esc(Lunit())}
+    </text>
+  </svg>
+  <figcaption>Grey is the coils stacked solid; shaded is the ${esc(L(w.deflection_mm))} you compress to reach
+    ${esc(F(w.targetForce_N))}${usableX != null ? `; the amber rule is the end of usable travel` : ''}.</figcaption>
+</figure>`;
+}
+
+/* --------------------------------------------------- force vs length chart */
+
+function forceChart(s, ev) {
+  const w = ev.working;
+  if (s.freeLength_mm == null || !w) return null;
+  const W = 720, H = 260;
+  const m = { t: 16, r: 16, b: 52, l: 56 };
+  const plotW = W - m.l - m.r, plotH = H - m.t - m.b;
+
+  const xMin = s.solidLength_mm ?? s.freeLength_mm - (s.usableTravel_mm ?? 0);
+  const xMax = s.freeLength_mm;
+  const yMax = Math.max(s.rate_Npmm * (xMax - xMin), w.targetForce_N) * 1.08;
+  const X = (mm) => m.l + ((mm - xMin) / (xMax - xMin)) * plotW;
+  const Y = (n) => m.t + plotH - (n / yMax) * plotH;
+
+  const ticks = (max, count) => {
+    const step = Math.pow(10, Math.floor(Math.log10(max / count)));
+    for (const mlt of [1, 2, 2.5, 5, 10]) if (max / (step * mlt) <= count) return { step: step * mlt };
+    return { step };
+  };
+  const yStep = ticks(yMax, 5).step;
+  const yTicks = []; for (let v = 0; v <= yMax; v += yStep) yTicks.push(v);
+  const xStep = ticks(xMax - xMin, 5).step;
+  const xTicks = []; for (let v = Math.ceil(xMin / xStep) * xStep; v <= xMax; v += xStep) xTicks.push(v);
+
+  const sen = w.sensitivity;
+  const bandLo = Y(Math.min(sen.forceRange_N[1], yMax));
+  const bandHi = Y(sen.forceRange_N[0]);
+  const usableX = s.minWorkingLength_mm != null ? X(s.minWorkingLength_mm) : null;
+
+  const svg = `<svg viewBox="0 0 ${W} ${H}" role="img"
+      aria-label="Force against installed length; the line is linear from free length down to solid">
+    <g stroke="var(--line)" stroke-width="1">
+      ${yTicks.map((v) => `<line x1="${m.l}" y1="${Y(v)}" x2="${W - m.r}" y2="${Y(v)}"/>`).join('')}
+    </g>
+    <g font-size="11" fill="var(--muted)" font-variant-numeric="tabular-nums">
+      ${yTicks.map((v) => `<text x="${m.l - 8}" y="${Y(v) + 4}" text-anchor="end">${nf(v, yStep < 1 ? 1 : 0)}</text>`).join('')}
+      ${xTicks.map((v) => `<text x="${X(v)}" y="${H - 30}" text-anchor="middle">${Lnum(v)}</text>`).join('')}
+      <text x="${m.l - 8}" y="${m.t - 4}" text-anchor="end">N</text>
+      <text x="${m.l + plotW / 2}" y="${H - 10}" text-anchor="middle">installed length, ${Lunit()}</text>
+    </g>
+    ${usableX != null ? `<line x1="${usableX}" y1="${m.t}" x2="${usableX}" y2="${m.t + plotH}" stroke="var(--warn)" stroke-width="1"/>
+      <text x="${usableX + (usableX < m.l + 130 ? 5 : -5)}" y="${m.t + 12}" font-size="11" fill="var(--muted)"
+        text-anchor="${usableX < m.l + 130 ? 'start' : 'end'}">usable travel ends</text>` : ''}
+    <rect x="${X(w.installedLength_mm) - 22}" y="${bandLo}" width="44" height="${Math.max(bandHi - bandLo, 1)}"
+          fill="var(--accent)" opacity="0.10"/>
+    <line x1="${X(xMax)}" y1="${Y(0)}" x2="${X(xMin)}" y2="${Y(s.rate_Npmm * (xMax - xMin))}"
+          stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="${X(w.installedLength_mm)}" cy="${Y(w.targetForce_N)}" r="5"
+            fill="var(--accent)" stroke="var(--panel)" stroke-width="2"/>
+    <text x="${X(w.installedLength_mm)}" y="${Y(w.targetForce_N) - 12}" font-size="12" fill="var(--ink)"
+          text-anchor="${X(w.installedLength_mm) > W * 0.75 ? 'end' : 'middle'}">${F(w.targetForce_N)}</text>
+    <g class="cross" opacity="0">
+      <line y1="${m.t}" y2="${m.t + plotH}" stroke="var(--muted)" stroke-width="1"/>
+      <circle r="5" fill="var(--ink)" stroke="var(--panel)" stroke-width="2"/>
+    </g>
+    <rect class="hit" x="${m.l}" y="${m.t}" width="${plotW}" height="${plotH}" fill="transparent"/>
+  </svg>`;
+
+  const fig = document.createElement('figure');
+  fig.className = 'figwrap';
+  fig.innerHTML = `${svg}<div class="tip" hidden></div>
+    <figcaption>Drag across the plot to read the load at any length. Shaded band is the
+      &plusmn;${pct(sen.worstCaseFraction)} you actually get once rate tolerance and
+      &plusmn;${L(sen.positionBand_mm)} of assembly position are counted.</figcaption>`;
+
+  // Crosshair readout -- the chart is a straight line, so the useful
+  // interaction is "what do I get at this length", not per-point hover.
+  const svgEl = fig.querySelector('svg');
+  const cross = fig.querySelector('.cross');
+  const tip = fig.querySelector('.tip');
+  const move = (evt) => {
+    const box = svgEl.getBoundingClientRect();
+    const sx = ((evt.clientX - box.left) / box.width) * W;
+    const clamped = Math.min(Math.max(sx, m.l), m.l + plotW);
+    const mm = xMin + ((clamped - m.l) / plotW) * (xMax - xMin);
+    const force = sm.forceAtLength(s.rate_Npmm, s.freeLength_mm, mm);
+    cross.setAttribute('opacity', '1');
+    cross.querySelector('line').setAttribute('x1', clamped);
+    cross.querySelector('line').setAttribute('x2', clamped);
+    cross.querySelector('circle').setAttribute('cx', clamped);
+    cross.querySelector('circle').setAttribute('cy', Y(Math.min(force, yMax)));
+    tip.hidden = false;
+    tip.innerHTML = `<strong>${F(force)}</strong><br>${nf(sm.nToLbf(force), 3)} lbf &middot; ${nf(force / 0.00980665, 0)} gf<br>
+      <span class="muted">at ${L(mm)}, compressed ${L(s.freeLength_mm - mm)}</span>`;
+    tip.style.left = `${(clamped / W) * 100}%`;
+    tip.style.top = `${(Y(Math.min(force, yMax)) / H) * 100}%`;
+  };
+  const leave = () => { cross.setAttribute('opacity', '0'); tip.hidden = true; };
+  svgEl.addEventListener('pointermove', move);
+  svgEl.addEventListener('pointerdown', move);
+  svgEl.addEventListener('pointerleave', leave);
+  return fig;
+}
+
+function mountViz(container, s, ev) {
+  const slot = container.querySelector('#viz-slot');
+  if (!slot || !ev.working) return;
+  slot.innerHTML = travelMeter(s, ev);
+  const chart = forceChart(s, ev);
+  if (chart) slot.append(chart);
+}
+
+/* ------------------------------------------------------------- FIND tab */
+
+function findRequirements() {
+  return {
+    targetForce_N: readForce('f-force', 'f-force-u'),
+    maxOD_mm: readLen('f-maxod'),
+    minID_mm: readLen('f-minid'),
+    maxFreeLength_mm: readLen('f-maxfree'),
+    maxInstalledLength_mm: readLen('f-maxinst'),
+    positionTol_mm: readLen('f-postol') ?? 0.25,
+    rateTol: (rawNum('f-ratetol') ?? 10) / 100,
+    maxTravelUsedFraction: (rawNum('f-maxtravel') ?? 100) / 100,
+    materials: $('f-material').value ? [$('f-material').value] : null,
+    sortBy: $('f-sort').value,
+    includeRejected: $('f-showall').checked,
+  };
+}
+
+function renderShopping(req) {
+  const box = $('f-shopping');
+  if (!req.targetForce_N || !req.maxOD_mm) { box.innerHTML = ''; return; }
+  const F0 = req.targetForce_N;
+  const ds = sm.designSpace({
+    targetForce_N: F0, maxOD_mm: req.maxOD_mm,
+    deflectionRange_mm: [sm.inToMm(0.05), Math.min(sm.inToMm(0.5), req.maxFreeLength_mm ?? sm.inToMm(0.5))],
+    steps: 6,
+  });
+  const [kSoft, kStiff] = ds.rateWindow_Npmm;
+  const rows = ds.points.map((p) => {
+    const best = p.options[0];
+    const band = (p.rate_Npmm * (req.positionTol_mm) + F0 * req.rateTol) / F0;
+    return `<tr>
+      <td class="num l">${Lnum(p.deflection_mm)}</td>
+      <td class="num">${nf(sm.nPerMmToLbfPerIn(p.rate_Npmm), 2)}</td>
+      <td class="num">${nf(p.rate_Npmm, 3)}</td>
+      <td class="num">&plusmn;${pct(band)}</td>
+      <td class="num">${best ? nf(sm.mmToIn(best.wireDia_mm), 3) : '—'}</td>
+      <td class="num">${best ? nf(best.activeCoils, 1) : '—'}</td>
+      <td class="num">${best ? Lnum(best.minFreeLength_mm) : '—'}</td>
+    </tr>`;
+  }).join('');
+
+  box.innerHTML = `<h2>What to shop for</h2>
+    <div class="callout">
+      <p>For <strong>${F(F0)}</strong> (${nf(sm.nToLbf(F0), 3)} lbf, ${nf(F0 / 0.00980665, 0)} gf,
+         ${nf(F0 / 0.2780138509, 1)} oz) inside <strong>${L(req.maxOD_mm)}</strong> OD, filter the vendor's
+         compression-spring table to this rate window:</p>
+      <p class="big">${nf(sm.nPerMmToLbfPerIn(kSoft), 2)} &ndash; ${nf(sm.nPerMmToLbfPerIn(kStiff), 2)} lbf/in
+        &nbsp;<span class="muted" style="font-size:13px">(${nf(kSoft, 3)} &ndash; ${nf(kStiff, 3)} N/mm)</span></p>
+      <p class="muted" style="font-size:13px">Softer end puts the working load ${L(sm.inToMm(0.5))} down the travel,
+        stiffer end ${L(sm.inToMm(0.05))}. Anything stiffer than that window and you are trying to hold a force
+        with a few thou of travel.</p>
+    </div>
+    <div class="scroll"><table>
+      <thead><tr><th class="l">compress by</th><th>rate lbf/in</th><th>rate N/mm</th><th>force band</th>
+        <th>wire in</th><th>coils</th><th>min free ${Lunit()}</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+    <p class="hint">Right-hand columns are the leanest geometry that delivers each rate inside your OD &mdash;
+      what a spring at that rate has to look like. Use it to sanity-check anything a vendor offers you.</p>`;
+}
+
+function renderResults(req) {
+  const box = $('f-results');
+  if (!state.catalogue.length) {
+    box.innerHTML = `<h2>Catalogue</h2>
+      <div class="callout warn"><p>No spring data loaded yet. Paste a vendor table on the
+        <button class="link" data-goto="catalog">Catalogue tab</button> and this becomes a real search.
+        The rate window above works without it.</p></div>`;
+    box.querySelector('[data-goto]').addEventListener('click', () =>
+      document.querySelector('nav.tabs button[data-tab="catalog"]').click());
+    return;
+  }
+  const hits = sm.searchCatalog(state.catalogue, req);
+  state.results = hits;
+  const okCount = hits.filter((h) => h.ok).length;
+
+  const rows = hits.map((h, i) => {
+    const w = h.evaluation.working;
+    const sev = severity(w?.travelUsedFraction);
+    return `<tr data-i="${i}" class="${h.ok ? '' : 'rejected'}">
+      <td class="l">${h.ok ? badge(sev, sev === 'ok' ? 'fits' : sev === 'warn' ? 'tight' : 'at limit') : badge('bad', 'no')}</td>
+      <td class="l">${esc(h.spring.partNumber || '—')}</td>
+      <td class="num">${Lnum(h.spring.od_mm)}</td>
+      <td class="num">${Lnum(h.spring.freeLength_mm)}</td>
+      <td class="num">${nf(sm.nPerMmToLbfPerIn(h.spring.rate_Npmm), 2)}</td>
+      <td class="num">${Lnum(w?.deflection_mm)}</td>
+      <td class="num">${Lnum(w?.installedLength_mm)}</td>
+      <td class="num">${pct(w?.travelUsedFraction)}</td>
+      <td class="num">&plusmn;${pct(w?.sensitivity.worstCaseFraction)}</td>
+      <td class="num">${pct(w?.utilisation)}</td>
+      <td class="l muted">${esc(h.ok ? '' : (h.rejected[0] || ''))}</td>
+    </tr>`;
+  }).join('');
+
+  box.innerHTML = `<h2>${okCount} of ${state.catalogue.length} springs can deliver ${F(req.targetForce_N)}</h2>
+    <div class="scroll"><table>
+      <thead><tr><th class="l"></th><th class="l">part</th><th>OD ${Lunit()}</th><th>free ${Lunit()}</th>
+        <th>rate lbf/in</th><th>compress ${Lunit()}</th><th>installed ${Lunit()}</th>
+        <th>travel used</th><th>force band</th><th>stress</th><th class="l">why not</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+    <p class="hint">Click a row for the full working-point report. &ldquo;Force band&rdquo; is what you
+      actually get once rate tolerance and assembly position error are counted &mdash; the reason a softer
+      spring compressed further beats a stiff one nudged slightly.</p>`;
+
+  box.querySelectorAll('tbody tr').forEach((tr) => tr.addEventListener('click', () => {
+    box.querySelectorAll('tbody tr').forEach((x) => x.classList.remove('sel'));
+    tr.classList.add('sel');
+    showDetail(Number(tr.dataset.i));
+  }));
+  if (okCount) { box.querySelector('tbody tr').classList.add('sel'); showDetail(0); }
+  else $('f-detail').innerHTML = '';
+}
+
+function showDetail(i) {
+  const h = state.results[i];
+  if (!h) return;
+  state.selected = h;
+  const holder = $('f-detail');
+  holder.innerHTML = renderReport(h.spring, h.evaluation);
+  mountViz(holder, h.spring, h.evaluation);
+}
+
+function runFind() {
+  const req = findRequirements();
+  if (!req.targetForce_N) { $('f-shopping').innerHTML = '<div class="callout bad"><p>Enter the force you need.</p></div>'; return; }
+  renderShopping(req);
+  renderResults(req);
+}
+$('f-run').addEventListener('click', runFind);
+$('f-len-u').addEventListener('change', () => {
+  state.lengthUnit = $('f-len-u').value;
+  $('a-units').value = state.lengthUnit;
+  runFind();
+});
+document.querySelectorAll('#tab-find input, #tab-find select').forEach((x) =>
+  x.addEventListener('keydown', (e) => { if (e.key === 'Enter') runFind(); }));
+
+/* ---------------------------------------------------------- ANALYSE tab */
+
+function analyseSpring() {
+  return cat.springFromForm({
+    partNumber: $('a-part').value || null,
+    lengthUnit: state.lengthUnit,
+    rateUnit: state.lengthUnit === 'in' ? 'lbf/in' : 'N/mm',
+    forceUnit: state.lengthUnit === 'in' ? 'lbf' : 'N',
+    od: $('a-od').value, id: $('a-id').value, wireDia: $('a-wire').value,
+    freeLength: $('a-free').value, rate: $('a-rate').value,
+    totalCoils: $('a-coils').value, maxLoad: $('a-maxload').value,
+    maxDeflection: $('a-maxdefl').value,
+    materialKey: $('a-material').value, endsKey: $('a-ends').value,
+  });
+}
+
+function runAnalyse() {
+  const out = $('a-out');
+  const s = analyseSpring();
+  if (s.incomplete) {
+    out.innerHTML = `<div class="card"><div class="callout bad"><p>Not enough to work with &mdash; missing
+      ${esc(s.missing.join(', '))}. A rate or a coil count will do for the rate.</p></div></div>`;
+    return;
+  }
+  const atLength = readLen('a-at');
+  const targetForce_N = atLength != null
+    ? sm.forceAtLength(s.rate_Npmm, s.freeLength_mm, atLength)
+    : readForce('a-force', 'a-force-u');
+
+  const ev = sm.evaluate(s, {
+    targetForce_N,
+    positionTol_mm: readLen('a-postol') ?? 0.25,
+    rateTol: (rawNum('a-ratetol') ?? 10) / 100,
+    endCondition: $('a-endcond').value,
+  });
+  out.innerHTML = renderReport(s, ev);
+  mountViz(out, s, ev);
+  if (atLength != null) {
+    out.querySelector('.card').insertAdjacentHTML('afterbegin',
+      `<div class="callout"><p>Held at ${L(atLength, { both: true })} this spring pushes
+        <span class="big">${F(targetForce_N)}</span> &nbsp;<span class="muted">${nf(sm.nToLbf(targetForce_N), 3)} lbf
+        &middot; ${nf(targetForce_N / 0.00980665, 0)} gf</span></p></div>`);
+  }
+}
+$('a-run').addEventListener('click', runAnalyse);
+$('a-units').addEventListener('change', () => {
+  state.lengthUnit = $('a-units').value;
+  $('f-len-u').value = state.lengthUnit;
+  runAnalyse();
+});
+$('a-save').addEventListener('click', () => {
+  const s = analyseSpring();
+  if (s.incomplete) { runAnalyse(); return; }
+  state.catalogue.push(s); saveStore(); renderCatalogue();
+  $('a-out').insertAdjacentHTML('afterbegin',
+    `<div class="callout"><p>Added to the catalogue (${state.catalogue.length} springs).</p></div>`);
+});
+
+/* ---------------------------------------------------------- CATALOG tab */
+
+function renderCatalogue() {
+  const box = $('c-list');
+  if (!state.catalogue.length) {
+    box.innerHTML = '<h2>Loaded springs</h2><p class="muted">Nothing loaded.</p>';
+    return;
+  }
+  const rows = state.catalogue.map((s, i) => `<tr>
+    <td class="l">${esc(s.partNumber || '—')}</td>
+    <td class="l muted">${esc(s.vendor || '')}</td>
+    <td class="num">${Lnum(s.od_mm)}</td>
+    <td class="num">${Lnum(s.wireDia_mm)}</td>
+    <td class="num">${Lnum(s.freeLength_mm)}</td>
+    <td class="num">${nf(sm.nPerMmToLbfPerIn(s.rate_Npmm), 2)}</td>
+    <td class="num">${Lnum(s.solidLength_mm)}</td>
+    <td class="num">${F(s.maxUsableForce_N)}</td>
+    <td class="l">${s.incomplete ? badge('bad', 'incomplete') : s.warnings.length ? badge('warn', String(s.warnings.length)) : ''}</td>
+    <td class="l"><button class="link" data-del="${i}">remove</button></td>
+  </tr>`).join('');
+  box.innerHTML = `<h2>Loaded springs (${state.catalogue.length})</h2>
+    <div class="scroll"><table>
+      <thead><tr><th class="l">part</th><th class="l">vendor</th><th>OD ${Lunit()}</th><th>wire ${Lunit()}</th>
+        <th>free ${Lunit()}</th><th>rate lbf/in</th><th>solid ${Lunit()}</th><th>max load</th>
+        <th class="l"></th><th class="l"></th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+  box.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => {
+    state.catalogue.splice(Number(b.dataset.del), 1); saveStore(); renderCatalogue();
+  }));
+}
+
+function importText(text, { vendor, us }) {
+  const res = cat.importTable(text, {
+    vendor,
+    lengthUnit: us ? 'in' : 'mm',
+    rateUnit: us ? 'lbf/in' : 'N/mm',
+    forceUnit: us ? 'lbf' : 'N',
+    urlTemplate: /mcmaster/i.test(vendor) ? 'https://www.mcmaster.com/{part}/' : null,
+  });
+  const status = $('c-status');
+  if (res.error) {
+    status.innerHTML = `<div class="callout bad"><p>${esc(res.error)}</p></div>`;
+    return;
+  }
+  if ($('c-mode').value === 'replace') state.catalogue = [];
+  const usable = res.springs.filter((s) => !s.incomplete);
+  state.catalogue.push(...res.springs);
+  saveStore(); renderCatalogue();
+
+  const mapped = res.mapping.filter((m) => m.field);
+  status.innerHTML = `<div class="callout ${usable.length ? '' : 'warn'}">
+    <p>Parsed <strong>${res.rows.length}</strong> rows &rarr; <strong>${usable.length}</strong> usable
+      ${res.springs.length - usable.length ? `, ${res.springs.length - usable.length} short of data` : ''}
+      ${res.skipped.length ? `, ${res.skipped.length} lines ignored` : ''}.</p>
+    <p class="muted" style="font-size:12px">Columns read: ${mapped.map((m) => `${esc(m.header)} &rarr; ${m.field}`).join(', ') || 'none'}
+      ${res.unmapped.length ? `<br>Ignored: ${res.unmapped.map((m) => esc(m.header)).join(', ')}` : ''}</p>
+  </div>`;
+}
+
+$('c-import').addEventListener('click', () =>
+  importText($('c-paste').value, { vendor: $('c-vendor').value, us: $('c-units').value === 'us' }));
+
+$('c-example').addEventListener('click', async () => {
+  try {
+    // The standalone build inlines the file; the hosted version fetches it.
+    let payload = window.EXAMPLE_CATALOGUE;
+    if (!payload) {
+      const r = await fetch('./data/example-catalogue.json');
+      if (!r.ok) throw new Error(r.status);
+      payload = await r.json();
+    }
+    const springs = cat.fromCatalogJson(payload);
+    if ($('c-mode').value === 'replace') state.catalogue = [];
+    state.catalogue.push(...springs);
+    saveStore(); renderCatalogue();
+    $('c-status').innerHTML = `<div class="callout warn"><p>Loaded ${springs.length} <strong>synthetic</strong>
+      springs. They are geometrically consistent and fine for trying the tool, but they are
+      <strong>not real parts</strong> &mdash; do not order from them.</p></div>`;
+  } catch (e) {
+    $('c-status').innerHTML = `<div class="callout bad"><p>Could not load the example catalogue (${esc(e.message)}).
+      If you opened this file directly from disk, serve the folder over HTTP instead.</p></div>`;
+  }
+});
+
+$('c-file').addEventListener('click', () => $('c-fileinput').click());
+$('c-fileinput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const text = await file.text();
+  if (file.name.endsWith('.json')) {
+    try {
+      const springs = cat.fromCatalogJson(text);
+      if ($('c-mode').value === 'replace') state.catalogue = [];
+      state.catalogue.push(...springs); saveStore(); renderCatalogue();
+      $('c-status').innerHTML = `<div class="callout"><p>Loaded ${springs.length} springs from ${esc(file.name)}.</p></div>`;
+    } catch (err) {
+      $('c-status').innerHTML = `<div class="callout bad"><p>${esc(file.name)} is not a catalogue file: ${esc(err.message)}</p></div>`;
+    }
+  } else {
+    importText(text, { vendor: $('c-vendor').value, us: $('c-units').value === 'us' });
+  }
+  e.target.value = '';
+});
+
+/**
+ * Saving the catalogue out. A plain page can hand the browser a blob link;
+ * inside a hosted viewer that link is inert, so ask the host to save instead.
+ */
+async function downloadCatalogue() {
+  const filename = 'spring-catalogue.json';
+  const json = JSON.stringify(cat.toCatalogJson(state.catalogue, { vendor: $('c-vendor').value }), null, 2);
+  const say = (kind, msg) => { $('c-status').innerHTML = `<div class="callout ${kind}"><p>${esc(msg)}</p></div>`; };
+
+  const host = typeof window.claude?.use === 'function'
+    ? await window.claude.use('downloads').catch(() => null)
+    : null;
+
+  if (host) {
+    try {
+      await host.save({ filename, data: json });
+      say('', `Saved ${filename} — ${state.catalogue.length} springs.`);
+    } catch (err) {
+      const code = err && err.code;
+      if (code === 'declined') say('warn', 'Save cancelled.');
+      else if (code === 'rate_limited') say('warn', 'A save prompt is already open — finish that one first.');
+      else say('bad', `Could not save the file${code ? ` (${code})` : ''}.`);
+    }
+    return;
+  }
+
+  const blob = new Blob([json], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+$('c-download').addEventListener('click', downloadCatalogue);
+
+$('c-clear').addEventListener('click', () => {
+  state.catalogue = []; saveStore(); renderCatalogue();
+  $('c-status').innerHTML = '';
+});
+
+/* ------------------------------------------------------------------ boot */
+
+loadStore();
+renderCatalogue();
+runFind();
+runAnalyse();
+
+</script>

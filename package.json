@@ -1,0 +1,12 @@
+{
+  "name": "clnew",
+  "version": "1.0.0",
+  "description": "Off-the-shelf compression spring calculator",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test 'test/*.test.mjs'",
+    "build": "node build-standalone.mjs && node build-standalone.mjs --artifact"
+  }
+}

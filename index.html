@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Off-the-Shelf Spring Calculator</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M6 6h20M6 11h20M6 16h20M6 21h20M6 26h20' stroke='%231f5fa8' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<meta name="description" content="Work out what force a stock compression spring gives at what length, and search a vendor catalogue backwards from the force you need.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Light is the base layer; dark is redefined twice so both the OS default
+   (unstamped) and an explicit data-theme choice resolve correctly. */
+:root{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#161a21; --muted:#5c6673; --line:#dde1e7;
+  --accent:#1256a0; --accent-soft:#e7eff8; --accent-line:#1256a0;
+  --ok:#166b47; --warn:#8a5a12; --bad:#a32b2b;
+  --ok-soft:#e4f1ea; --warn-soft:#f8efdd; --bad-soft:#f9e8e8;
+  --shadow:0 1px 2px rgba(22,26,33,.05);
+  --sans:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --cond:"IBM Plex Sans Condensed","IBM Plex Sans",-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#111418; --panel:#181c22; --ink:#e6e9ee; --muted:#98a2b0; --line:#2a3039;
+    --accent:#63a4e8; --accent-soft:#16232f; --accent-line:#3d7fc4;
+    --ok:#5cbb8b; --warn:#d9a95d; --bad:#e08585;
+    --ok-soft:#14261d; --warn-soft:#282116; --bad-soft:#2a1a1a;
+    --shadow:0 1px 2px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111418; --panel:#181c22; --ink:#e6e9ee; --muted:#98a2b0; --line:#2a3039;
+  --accent:#63a4e8; --accent-soft:#16232f; --accent-line:#3d7fc4;
+  --ok:#5cbb8b; --warn:#d9a95d; --bad:#e08585;
+  --ok-soft:#14261d; --warn-soft:#282116; --bad-soft:#2a1a1a;
+  --shadow:0 1px 2px rgba(0,0,0,.3);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 var(--sans)}
+.wrap{max-width:1120px;margin:0 auto;padding:24px 16px 72px}
+header h1{font-size:23px;font-weight:600;letter-spacing:-.01em;margin:0 0 6px;text-wrap:balance}
+header p{margin:0 0 20px;color:var(--muted);max-width:64ch}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+h2{font:600 12px/1.3 var(--cond);margin:0 0 14px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+h3{font-size:14px;font-weight:600;margin:20px 0 8px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:18px;margin-bottom:16px;box-shadow:var(--shadow)}
+
+/* tabs */
+nav.tabs{display:flex;gap:2px;flex-wrap:wrap;margin-bottom:18px;border-bottom:1px solid var(--line)}
+nav.tabs button{background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);
+  padding:9px 13px;font:500 14px/1 var(--sans);cursor:pointer;margin-bottom:-1px}
+nav.tabs button:hover{color:var(--ink)}
+nav.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.panel[hidden]{display:none}
+
+/* forms */
+.grid{display:grid;gap:14px 16px;grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+label{display:block;font:600 11px/1.3 var(--cond);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+.combo{display:flex}
+input,select,textarea{width:100%;background:var(--bg);color:var(--ink);
+  border:1px solid var(--line);border-radius:5px;padding:7px 9px;font:15px/1.4 var(--sans)}
+input[type=number]{font-family:var(--mono);font-size:14px;font-variant-numeric:tabular-nums}
+.combo input{border-radius:5px 0 0 5px;border-right:none}
+.combo select{border-radius:0 5px 5px 0;width:auto;min-width:74px;background:var(--panel)}
+textarea{font:12px/1.5 var(--mono);min-height:170px;resize:vertical}
+.hint{font-size:12.5px;color:var(--muted);margin-top:5px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:16px}
+button.go,button.alt{border:1px solid var(--accent);border-radius:5px;padding:8px 16px;
+  font:600 14px/1.3 var(--sans);cursor:pointer;background:var(--accent);color:#fff}
+button.alt{background:transparent;color:var(--accent)}
+button.alt:hover,button.go:hover{filter:brightness(1.1)}
+button.link{background:none;border:none;color:var(--accent);font:inherit;cursor:pointer;padding:0;text-decoration:underline}
+
+/* callout */
+.callout{background:var(--accent-soft);border:1px solid var(--line);border-left:3px solid var(--accent-line);
+  border-radius:5px;padding:13px 15px;margin:0 0 16px}
+.callout.warn{background:var(--warn-soft);border-left-color:var(--warn)}
+.callout.bad{background:var(--bad-soft);border-left-color:var(--bad)}
+.callout p{margin:0 0 6px}
+.callout p:last-child{margin:0}
+.big{font:600 21px/1.3 var(--mono);letter-spacing:-.01em;color:var(--ink)}
+
+/* tables */
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{border-collapse:collapse;width:100%;font-size:13px;white-space:nowrap}
+th,td{text-align:right;padding:7px 10px;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child,th.l,td.l{text-align:left}
+th{font:600 11px/1.3 var(--cond);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);
+  position:sticky;top:0;background:var(--panel)}
+tbody tr:hover{background:var(--accent-soft)}
+tbody tr.sel{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+td.num{font-variant-numeric:tabular-nums;font-family:var(--mono);font-size:12.5px}
+tr.rejected{color:var(--muted)}
+.pill{display:inline-block;padding:2px 8px;border-radius:99px;font:600 11px/1.5 var(--cond);letter-spacing:.04em;text-transform:uppercase}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}
+.derived{color:var(--muted);font:400 11px/1.4 var(--sans)}
+
+/* spec readout */
+dl.specs{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;margin:0;font-size:13px}
+dl.specs dt{color:var(--muted)}
+dl.specs dd{margin:0;font-family:var(--mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+.cols{display:grid;gap:24px;grid-template-columns:repeat(auto-fit,minmax(270px,1fr))}
+ul.notes{margin:12px 0 0;padding-left:18px;font-size:13px;color:var(--muted)}
+ul.notes li{margin-bottom:4px}
+.muted{color:var(--muted)}
+figure{margin:20px 0 0}
+#viz-slot figure{overflow-x:auto}
+#viz-slot svg{min-width:460px}
+.figwrap{position:relative}
+.tip{position:absolute;transform:translate(-50%,-140%);background:var(--panel);
+  border:1px solid var(--line);border-radius:5px;padding:7px 10px;font:12px/1.45 var(--sans);
+  pointer-events:none;white-space:nowrap;box-shadow:0 2px 12px rgba(0,0,0,.16);z-index:2}
+.tip strong{font-family:var(--mono);font-size:13px}
+figcaption{font-size:12.5px;color:var(--muted);margin-top:8px;max-width:70ch}
+svg{max-width:100%;height:auto;display:block}
+svg text{font-family:var(--mono)}
+details{margin-top:12px}
+summary{cursor:pointer;font-size:13px;color:var(--accent)}
+code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px;border-radius:4px}
+.eq{font:13px/1.7 var(--mono);background:var(--bg);border:1px solid var(--line);
+  border-radius:5px;padding:10px 12px;margin:10px 0;overflow-x:auto}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Off-the-shelf spring calculator</h1>
+  <p>Pick a stock compression spring and get the force it makes at any length &mdash; or start from the
+     force you need and search a vendor catalogue backwards. Built around what McMaster-Carr actually
+     publishes (OD, wire diameter, free length, rate) and derives the rest.</p>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button role="tab" data-tab="find" aria-selected="true">Find a spring</button>
+  <button role="tab" data-tab="analyze" aria-selected="false">Analyse one spring</button>
+  <button role="tab" data-tab="catalog" aria-selected="false">Catalogue</button>
+  <button role="tab" data-tab="method" aria-selected="false">Method</button>
+</nav>
+
+<!-- ------------------------------------------------------------- FIND -->
+<section class="panel" id="tab-find">
+  <div class="card">
+    <h2>What you need</h2>
+    <div class="grid">
+      <div><label for="f-force">Output force</label>
+        <div class="combo"><input type="number" id="f-force" value="1.5" step="any">
+          <select id="f-force-u"><option>N</option><option>lbf</option><option>gf</option><option>ozf</option><option>kgf</option></select></div></div>
+      <div><label for="f-maxod">Max outside diameter</label>
+        <div class="combo"><input type="number" id="f-maxod" value="0.5" step="any">
+          <select id="f-len-u"><option value="in">in</option><option value="mm">mm</option></select></div></div>
+      <div><label for="f-minid">Must clear a rod of (optional)</label>
+        <input type="number" id="f-minid" placeholder="none" step="any"></div>
+      <div><label for="f-maxfree">Max free length (optional)</label>
+        <input type="number" id="f-maxfree" placeholder="none" step="any"></div>
+      <div><label for="f-maxinst">Max installed length (optional)</label>
+        <input type="number" id="f-maxinst" placeholder="none" step="any"></div>
+      <div><label for="f-postol">Position tolerance at assembly &plusmn;</label>
+        <input type="number" id="f-postol" value="0.010" step="any"></div>
+      <div><label for="f-ratetol">Spring rate tolerance &plusmn;%</label>
+        <input type="number" id="f-ratetol" value="10" step="any"></div>
+      <div><label for="f-maxtravel">Max share of usable travel</label>
+        <input type="number" id="f-maxtravel" value="90" step="any"></div>
+      <div><label for="f-material">Material</label>
+        <select id="f-material"><option value="">any</option></select></div>
+      <div><label for="f-sort">Rank by</label>
+        <select id="f-sort">
+          <option value="robustness">best all-round</option>
+          <option value="force-precision">tightest force control</option>
+          <option value="travel">most travel headroom</option>
+          <option value="compact">smallest package</option>
+          <option value="rate">softest rate</option>
+        </select></div>
+    </div>
+    <div class="row">
+      <button class="go" id="f-run">Search catalogue</button>
+      <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:13px;text-transform:none;font-weight:400">
+        <input type="checkbox" id="f-showall" style="width:auto"> show springs that do not fit, and why</label>
+    </div>
+  </div>
+
+  <div class="card" id="f-shopping"></div>
+  <div class="card" id="f-results"></div>
+  <div id="f-detail"></div>
+</section>
+
+<!-- ---------------------------------------------------------- ANALYSE -->
+<section class="panel" id="tab-analyze" hidden>
+  <div class="card">
+    <h2>The spring</h2>
+    <p class="hint" style="margin-top:-6px">Type in what the vendor lists. Anything you leave blank is derived
+      if it can be &mdash; give it a rate <em>or</em> a coil count, and it works out the other.</p>
+    <div class="grid">
+      <div><label for="a-part">Part number / name</label><input id="a-part" placeholder="9657K304"></div>
+      <div><label for="a-units">Units in</label>
+        <select id="a-units"><option value="in">inch &amp; lbf</option><option value="mm">mm &amp; N</option></select></div>
+      <div><label for="a-od">Outside diameter</label><input type="number" id="a-od" step="any" value="0.36"></div>
+      <div><label for="a-id">Inside diameter</label><input type="number" id="a-id" step="any" placeholder="derived"></div>
+      <div><label for="a-wire">Wire diameter</label><input type="number" id="a-wire" step="any" value="0.032"></div>
+      <div><label for="a-free">Free length</label><input type="number" id="a-free" step="any" value="1.0"></div>
+      <div><label for="a-rate">Spring rate</label><input type="number" id="a-rate" step="any" value="2.48"></div>
+      <div><label for="a-coils">Total coils</label><input type="number" id="a-coils" step="any" placeholder="derived"></div>
+      <div><label for="a-maxload">Vendor max load</label><input type="number" id="a-maxload" step="any" placeholder="optional"></div>
+      <div><label for="a-maxdefl">Vendor max deflection</label><input type="number" id="a-maxdefl" step="any" placeholder="optional"></div>
+      <div><label for="a-material">Material</label><select id="a-material"></select></div>
+      <div><label for="a-ends">Ends</label><select id="a-ends"></select></div>
+    </div>
+    <h3>Working point</h3>
+    <div class="grid">
+      <div><label for="a-force">Force I want</label>
+        <div class="combo"><input type="number" id="a-force" value="1.5" step="any">
+          <select id="a-force-u"><option>N</option><option>lbf</option><option>gf</option><option>ozf</option></select></div>
+        <div class="hint">&rarr; solves for the length</div></div>
+      <div><label for="a-at">&hellip;or a length I am fixed at</label>
+        <input type="number" id="a-at" step="any" placeholder="optional">
+        <div class="hint">&rarr; solves for the force</div></div>
+      <div><label for="a-postol">Position tolerance &plusmn;</label><input type="number" id="a-postol" value="0.010" step="any"></div>
+      <div><label for="a-ratetol">Rate tolerance &plusmn;%</label><input type="number" id="a-ratetol" value="10" step="any"></div>
+      <div><label for="a-endcond">How it is guided</label><select id="a-endcond"></select></div>
+    </div>
+    <div class="row">
+      <button class="go" id="a-run">Calculate</button>
+      <button class="alt" id="a-save">Add to catalogue</button>
+    </div>
+  </div>
+  <div id="a-out"></div>
+</section>
+
+<!-- ---------------------------------------------------------- CATALOG -->
+<section class="panel" id="tab-catalog" hidden>
+  <div class="card">
+    <h2>Load real vendor data</h2>
+    <p class="hint" style="margin-top:-6px">
+      On <a href="https://www.mcmaster.com/products/compression-springs/" target="_blank" rel="noopener">mcmaster.com</a>
+      filter the compression-spring table down to what you are after, select the table in the browser,
+      copy, and paste it below. The header row matters &mdash; it is what tells the parser which column is which.
+      CSV works too, as does a metric table if you switch the units.</p>
+    <textarea id="c-paste" placeholder="Part #&#9;OD&#9;ID&#9;Wire Dia.&#9;Lg.&#9;Spring Rate, lbs./in.&#9;Material&#9;Ends
+9657K304&#9;0.36&quot;&#9;0.296&quot;&#9;0.032&quot;&#9;0.471&quot;&#9;4.5&#9;Zinc-Plated Music Wire&#9;Closed &amp; Ground"></textarea>
+    <div class="grid" style="margin-top:12px">
+      <div><label for="c-vendor">Vendor</label><input id="c-vendor" value="McMaster-Carr"></div>
+      <div><label for="c-units">Table units</label>
+        <select id="c-units"><option value="us">inch &amp; lbs./in.</option><option value="si">mm &amp; N/mm</option></select></div>
+      <div><label for="c-mode">On import</label>
+        <select id="c-mode"><option value="append">add to what is loaded</option><option value="replace">replace everything</option></select></div>
+    </div>
+    <div class="row">
+      <button class="go" id="c-import">Parse and load</button>
+      <button class="alt" id="c-example">Load example catalogue</button>
+      <button class="alt" id="c-file">Open a .json / .csv file</button>
+      <button class="alt" id="c-download">Download as JSON</button>
+      <button class="alt" id="c-clear">Clear</button>
+      <input type="file" id="c-fileinput" accept=".json,.csv,.tsv,.txt" hidden>
+    </div>
+    <div id="c-status"></div>
+  </div>
+  <div class="card" id="c-list"></div>
+</section>
+
+<!-- ----------------------------------------------------------- METHOD -->
+<section class="panel" id="tab-method" hidden>
+  <div class="card">
+    <h2>What this actually computes</h2>
+    <p>A helical compression spring is linear over its working range, so everything follows from the rate:</p>
+    <div class="eq">F = k &middot; x&nbsp;&nbsp;&nbsp;&nbsp;x = L&#8320; &minus; L&nbsp;&nbsp;&nbsp;&nbsp;k = G d&#8308; / (8 D&sup3; N&#9040;)</div>
+    <p class="hint">d = wire diameter, D = mean diameter = OD &minus; d, N&#9040; = active coils, G = shear modulus.</p>
+
+    <h3>Why the coil count matters even though vendors do not print it</h3>
+    <p>McMaster lists OD, ID, wire diameter, free length and rate &mdash; but not coil count, and therefore not
+       solid height. Without solid height you cannot tell whether your working point is even reachable.
+       So the rate equation is inverted for N&#9040;, the end treatment gives total coils and solid height from
+       there, and travel to solid falls out. Those derived numbers are marked <span class="derived">derived</span>
+       everywhere they appear.</p>
+    <div class="eq">N&#9040; = G d&#8308; / (8 D&sup3; k)&nbsp;&nbsp;&nbsp;&nbsp;N&#8348; = N&#9040; + inactive coils&nbsp;&nbsp;&nbsp;&nbsp;L&#8347; = N&#8348; d (ground ends)</div>
+
+    <h3>Usable travel</h3>
+    <p>Vendor max deflection is used when published. Otherwise usable travel is taken as 85% of travel to
+       solid: running a stock spring down to solid is how it takes a permanent set and stops being the
+       spring you specified.</p>
+
+    <h3>Stress</h3>
+    <div class="eq">&tau; = K&#8347; &middot; 8 F D / (&pi; d&sup3;)&nbsp;&nbsp;&nbsp;&nbsp;K&#8347; = 1 + 0.5/C&nbsp;&nbsp;&nbsp;&nbsp;C = D/d</div>
+    <p>Allowable is a fraction of ultimate tensile strength, itself a function of wire diameter
+       (S&#8348; = A/d&#7745;, Shigley table 10-4): 45% for music wire, 35% for austenitic stainless. The Wahl
+       factor is reported alongside for anyone taking the spring into cyclic duty, where it is the one to use.</p>
+
+    <h3>The number most calculators skip: how tightly can you hold the force?</h3>
+    <p>Force error comes from two places &mdash; where the spring actually ends up (dF/dx = k, so a stiff
+       spring punishes assembly slop) and the rate tolerance of the spring itself (&plusmn;10% is normal for
+       stock, commercial-grade springs). Both are reported, worst case and RSS.
+       This is why a softer spring compressed further beats a stiff one nudged slightly, every time.</p>
+
+    <h3>Buckling</h3>
+    <p>Small-diameter springs get slender fast. The Shigley criterion is applied: below a critical free
+       length the spring is stable at any deflection; above it, a critical deflection is reported, and how
+       the ends are guided changes it by a factor of four.</p>
+
+    <h3>Assumptions and limits</h3>
+    <ul class="notes">
+      <li>Round wire, helical compression springs, static or low-cycle duty. No fatigue life, no surge frequency.</li>
+      <li>Rate is treated as constant. Real springs stiffen in the last 15&ndash;20% of travel as the end coils close.</li>
+      <li>Shear modulus is a single published value per material; music wire actually varies a few percent with wire size.</li>
+      <li>Nothing here is a substitute for measuring the spring you were actually shipped.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h2>Where the numbers come from</h2>
+    <p>No spring data is bundled. Catalogue rows are whatever you paste in or import, and every row keeps
+       the part number and a link back to the vendor page so you can check it. The example catalogue is
+       synthetic &mdash; geometrically consistent, useful for trying the tool, and
+       <strong>not real vendor parts</strong>. Do not order from it.</p>
+    <p class="hint">Engine, tests and a command-line version:
+       <a href="https://github.com/ahmedbma/clnew">source on GitHub</a>.</p>
+  </div>
+</section>
+
+</div>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
