@@ -390,7 +390,7 @@ function findRequirements() {
     minID_mm: readLen('f-minid'),
     maxFreeLength_mm: readLen('f-maxfree'),
     maxInstalledLength_mm: readLen('f-maxinst'),
-    positionTol_mm: readLen('f-postol') ?? 0.25,
+    positionTol_mm: readLen('f-postol') ?? sm.inToMm(0.010),
     rateTol: (rawNum('f-ratetol') ?? 10) / 100,
     maxTravelUsedFraction: (rawNum('f-maxtravel') ?? 100) / 100,
     materials: $('f-material').value ? [$('f-material').value] : null,
@@ -401,45 +401,56 @@ function findRequirements() {
 
 function renderShopping(req) {
   const box = $('f-shopping');
-  if (!req.targetForce_N || !req.maxOD_mm) { box.innerHTML = ''; return; }
   const F0 = req.targetForce_N;
-  const ds = sm.designSpace({
-    targetForce_N: F0, maxOD_mm: req.maxOD_mm,
-    deflectionRange_mm: [sm.inToMm(0.05), Math.min(sm.inToMm(0.5), req.maxFreeLength_mm ?? sm.inToMm(0.5))],
-    steps: 6,
+  if (!F0) { box.innerHTML = ''; return; }
+
+  // The rate window is pure F/x -- it needs no envelope at all. Geometry does,
+  // so those columns only appear once a diameter is given.
+  const xMin = sm.inToMm(0.05);
+  const xMax = Math.min(sm.inToMm(0.5), req.maxFreeLength_mm ?? sm.inToMm(0.5));
+  const hasOD = req.maxOD_mm != null;
+  const ds = hasOD
+    ? sm.designSpace({ targetForce_N: F0, maxOD_mm: req.maxOD_mm, deflectionRange_mm: [xMin, xMax], steps: 6 })
+    : null;
+
+  const points = ds ? ds.points : Array.from({ length: 6 }, (_, i) => {
+    const x = xMin * Math.pow(xMax / xMin, i / 5);
+    return { deflection_mm: x, rate_Npmm: F0 / x, options: [] };
   });
-  const [kSoft, kStiff] = ds.rateWindow_Npmm;
-  const rows = ds.points.map((p) => {
+  const [kSoft, kStiff] = [F0 / xMax, F0 / xMin];
+
+  const rows = points.map((p) => {
     const best = p.options[0];
-    const band = (p.rate_Npmm * (req.positionTol_mm) + F0 * req.rateTol) / F0;
+    const band = (p.rate_Npmm * req.positionTol_mm + F0 * req.rateTol) / F0;
     return `<tr>
       <td class="num l">${Lnum(p.deflection_mm)}</td>
       <td class="num">${nf(sm.nPerMmToLbfPerIn(p.rate_Npmm), 2)}</td>
       <td class="num">${nf(p.rate_Npmm, 3)}</td>
       <td class="num">&plusmn;${pct(band)}</td>
-      <td class="num">${best ? nf(sm.mmToIn(best.wireDia_mm), 3) : '—'}</td>
+      ${hasOD ? `<td class="num">${best ? nf(sm.mmToIn(best.wireDia_mm), 3) : '—'}</td>
       <td class="num">${best ? nf(best.activeCoils, 1) : '—'}</td>
-      <td class="num">${best ? Lnum(best.minFreeLength_mm) : '—'}</td>
+      <td class="num">${best ? Lnum(best.minFreeLength_mm) : '—'}</td>` : ''}
     </tr>`;
   }).join('');
 
   box.innerHTML = `<h2>What to shop for</h2>
     <div class="callout">
       <p>For <strong>${F(F0)}</strong> (${nf(sm.nToLbf(F0), 3)} lbf, ${nf(F0 / 0.00980665, 0)} gf,
-         ${nf(F0 / 0.2780138509, 1)} oz) inside <strong>${L(req.maxOD_mm)}</strong> OD, filter the vendor's
-         compression-spring table to this rate window:</p>
+         ${nf(F0 / 0.2780138509, 1)} oz)${hasOD ? ` inside <strong>${L(req.maxOD_mm)}</strong> OD` : ''},
+         filter the vendor's compression-spring table to this rate window:</p>
       <p class="big">${nf(sm.nPerMmToLbfPerIn(kSoft), 2)} &ndash; ${nf(sm.nPerMmToLbfPerIn(kStiff), 2)} lbf/in
         &nbsp;<span class="muted" style="font-size:13px">(${nf(kSoft, 3)} &ndash; ${nf(kStiff, 3)} N/mm)</span></p>
-      <p class="muted" style="font-size:13px">Softer end puts the working load ${L(sm.inToMm(0.5))} down the travel,
-        stiffer end ${L(sm.inToMm(0.05))}. Anything stiffer than that window and you are trying to hold a force
+      <p class="muted" style="font-size:13px">Softer end puts the working load ${L(xMax)} down the travel,
+        stiffer end ${L(xMin)}. Anything stiffer than that window and you are trying to hold a force
         with a few thou of travel.</p>
     </div>
     <div class="scroll"><table>
       <thead><tr><th class="l">compress by</th><th>rate lbf/in</th><th>rate N/mm</th><th>force band</th>
-        <th>wire in</th><th>coils</th><th>min free ${Lunit()}</th></tr></thead>
+        ${hasOD ? `<th>wire in</th><th>coils</th><th>min free ${Lunit()}</th>` : ''}</tr></thead>
       <tbody>${rows}</tbody></table></div>
-    <p class="hint">Right-hand columns are the leanest geometry that delivers each rate inside your OD &mdash;
-      what a spring at that rate has to look like. Use it to sanity-check anything a vendor offers you.</p>`;
+    <p class="hint">${hasOD
+      ? 'Right-hand columns are the leanest geometry that delivers each rate inside your OD — what a spring at that rate has to look like. Use it to sanity-check anything a vendor offers you.'
+      : 'Give a maximum outside diameter under “narrow it down” and this also shows what a spring at each rate has to look like — wire size, coil count, shortest possible free length.'}</p>`;
 }
 
 function renderResults(req) {
@@ -503,9 +514,25 @@ function showDetail(i) {
   mountViz(holder, h.spring, h.evaluation);
 }
 
+/** Live restatement of the force in the units people actually quote springs in. */
+function renderEquivalents() {
+  const N = readForce('f-force', 'f-force-u');
+  $('f-equiv').textContent = N
+    ? `= ${nf(N, 3)} N  ·  ${nf(sm.nToLbf(N), 4)} lbf  ·  ${nf(N / 0.00980665, 1)} gf  ·  ${nf(N / 0.2780138509, 2)} oz`
+    : '';
+}
+
 function runFind() {
   const req = findRequirements();
-  if (!req.targetForce_N) { $('f-shopping').innerHTML = '<div class="callout bad"><p>Enter the force you need.</p></div>'; return; }
+  renderEquivalents();
+  if (!req.targetForce_N) {
+    $('f-shopping').innerHTML = `<h2>What to shop for</h2>
+      <p class="muted">Put in the force you need and this fills in — the spring-rate window to
+        filter a vendor's table by, and every catalogue spring that can deliver it.</p>`;
+    $('f-results').innerHTML = '';
+    $('f-detail').innerHTML = '';
+    return;
+  }
   renderShopping(req);
   renderResults(req);
 }
@@ -517,6 +544,8 @@ $('f-len-u').addEventListener('change', () => {
 });
 document.querySelectorAll('#tab-find input, #tab-find select').forEach((x) =>
   x.addEventListener('keydown', (e) => { if (e.key === 'Enter') runFind(); }));
+$('f-force').addEventListener('input', renderEquivalents);
+$('f-force-u').addEventListener('change', renderEquivalents);
 
 /* ---------------------------------------------------------- ANALYSE tab */
 
@@ -536,6 +565,14 @@ function analyseSpring() {
 
 function runAnalyse() {
   const out = $('a-out');
+  const untouched = ['a-od', 'a-id', 'a-wire', 'a-free', 'a-rate', 'a-coils']
+    .every((id) => $(id).value.trim() === '');
+  if (untouched) {
+    out.innerHTML = `<div class="card"><p class="muted">Type in what the vendor lists for a spring
+      you already have — outside diameter, wire diameter, free length, and either a spring rate or a
+      coil count. Anything else is worked out for you.</p></div>`;
+    return;
+  }
   const s = analyseSpring();
   if (s.incomplete) {
     out.innerHTML = `<div class="card"><div class="callout bad"><p>Not enough to work with &mdash; missing

@@ -3,9 +3,10 @@
 Work out what force a stock compression spring makes at what length, in both
 directions:
 
-* **forward** — this spring, held at this length, pushes this hard;
-* **backward** — I need this force in this envelope, which catalogue parts can do
-  it, and how far do I have to compress each one.
+* **backward** — I need this force: which catalogue parts can deliver it, and how
+  far do I have to compress each one. Force is the only required input; diameter,
+  length, travel and material are optional filters that start blank.
+* **forward** — this spring, held at this length, pushes this hard.
 
 Live page: <https://ahmedbma.github.io/clnew/>
 
