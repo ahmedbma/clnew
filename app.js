@@ -24,6 +24,8 @@ const state = {
  * Identity of a spring across the shared list and a local one, so a locally
  * edited part supersedes the shipped row rather than duplicating it.
  */
+const springName = (s) => s.partNumber || s.label || '—';
+
 const springKey = (s) => (s.partNumber
   ? `${(s.vendor || '').toLowerCase().trim()}|${String(s.partNumber).toLowerCase().replace(/\s+/g, '')}`
   : `geom|${[s.od_mm, s.wireDia_mm, s.freeLength_mm, s.rate_Npmm]
@@ -225,7 +227,7 @@ function renderReport(s, ev) {
     : '';
 
   return `<div class="card">
-    <h2>${esc(s.partNumber || 'Spring')} ${verdict}</h2>
+    <h2>${esc(s.partNumber || s.label || 'Spring')} ${verdict}</h2>
     ${s.url ? `<p class="hint" style="margin-top:-8px"><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.url)}</a></p>` : ''}
     <div class="cols">
       <div><h3 style="margin-top:0">The spring</h3>${specList(s)}</div>
@@ -460,7 +462,7 @@ function renderResults(req) {
     const sev = severity(w?.travelUsedFraction);
     return `<tr data-i="${i}" class="${h.ok ? '' : 'rejected'}">
       <td class="l">${h.ok ? badge(sev, sev === 'ok' ? 'fits' : sev === 'warn' ? 'tight' : 'at limit') : badge('bad', 'no')}</td>
-      <td class="l">${esc(h.spring.partNumber || '—')}</td>
+      <td class="l">${esc(springName(h.spring))}</td>
       <td class="num">${Lnum(h.spring.od_mm)}</td>
       <td class="num">${Lnum(h.spring.freeLength_mm)}</td>
       <td class="num">${nf(sm.nPerMmToLbfPerIn(h.spring.rate_Npmm), 2)}</td>
@@ -595,7 +597,7 @@ function renderCatalogue() {
 
   const rows = state.catalogue.map((s) => `<tr>
     <td class="l">${s._origin === 'shared' ? badge('ok', 'shipped') : badge('warn', 'yours')}</td>
-    <td class="l">${esc(s.partNumber || '—')}</td>
+    <td class="l">${esc(springName(s))}</td>
     <td class="l muted">${esc(s.vendor || '')}</td>
     <td class="num">${Lnum(s.od_mm)}</td>
     <td class="num">${Lnum(s.wireDia_mm)}</td>
@@ -630,30 +632,74 @@ function wireCatalogueButtons() {
   $('c-restore').hidden = state.hidden.size === 0;
 }
 
+/**
+ * Show exactly what the paste was understood to mean. Pasting data into a
+ * calculator is an act of trust; this is the receipt.
+ */
+function renderImportReview(res, added) {
+  const status = $('c-status');
+  const bits = [];
+
+  if (res.format === 'spec-sheet') {
+    const blocks = res.blocks;
+    const good = blocks.filter((b) => !b.rejected);
+    bits.push(`<div class="callout ${good.length ? '' : 'bad'}">
+      <p>Read as ${blocks.length === 1 ? 'a product spec sheet' : `${blocks.length} product spec sheets`}
+        &mdash; the label-and-value kind from a vendor product page, not a table.
+        ${good.length ? `<strong>${good.length} spring${good.length === 1 ? '' : 's'} added.</strong>` : 'Nothing added.'}</p>
+      ${res.rejected.map((r) => `<p>${esc(r.rejected)}</p>`).join('')}
+    </div>`);
+
+    for (const b of good) {
+      const s = b.spring;
+      const derived = (s.derived || []).filter((d) => !d.endsWith('Key'));
+      bits.push(`<h3>${esc(springName(s))}${s.partNumber ? '' : ' <span class="derived">named from its dimensions &mdash; the page gave no part number</span>'}</h3>
+        <div class="scroll"><table>
+          <thead><tr><th class="l">on the page</th><th class="l">value</th><th class="l">used as</th></tr></thead>
+          <tbody>${b.read.map((r) => `<tr>
+            <td class="l">${esc(r.label)}</td>
+            <td class="l num">${esc(r.value)}</td>
+            <td class="l muted">${esc(r.field)}${r.note ? ` &mdash; ${esc(r.note)}` : ''}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+        ${derived.length ? `<p class="hint">Worked out from those: ${derived.map((d) => `<code>${esc(d)}</code>`).join(' ')}</p>` : ''}
+        ${b.ignored.length ? `<p class="hint">Ignored, not spring data: ${b.ignored.map(esc).join(', ')}</p>` : ''}
+        ${s.warnings.length ? `<ul class="notes">${s.warnings.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}`);
+    }
+    status.innerHTML = bits.join('');
+    return;
+  }
+
+  const mapped = res.mapping.filter((m) => m.field);
+  const usable = added.filter((s) => !s.incomplete);
+  status.innerHTML = `<div class="callout ${usable.length ? '' : 'warn'}">
+    <p>Read as a catalogue table. Parsed <strong>${res.rows.length}</strong> rows &rarr;
+      <strong>${usable.length}</strong> usable
+      ${added.length - usable.length ? `, ${added.length - usable.length} short of data` : ''}
+      ${res.skipped.length ? `, ${res.skipped.length} lines ignored` : ''}.</p>
+    <p class="muted" style="font-size:12px">Columns read: ${mapped.map((m) => `${esc(m.header)} &rarr; ${m.field}`).join(', ') || 'none'}
+      ${res.unmapped.length ? `<br>Ignored: ${res.unmapped.map((m) => esc(m.header)).join(', ')}` : ''}</p>
+  </div>`;
+}
+
 function importText(text, { vendor, us }) {
-  const res = cat.importTable(text, {
+  const res = cat.importAny(text, {
     vendor,
+    partNumber: $('c-part').value.trim() || null,
     lengthUnit: us ? 'in' : 'mm',
     rateUnit: us ? 'lbf/in' : 'N/mm',
     forceUnit: us ? 'lbf' : 'N',
     urlTemplate: /mcmaster/i.test(vendor) ? 'https://www.mcmaster.com/{part}/' : null,
   });
-  const status = $('c-status');
   if (res.error) {
-    status.innerHTML = `<div class="callout bad"><p>${esc(res.error)}</p></div>`;
+    $('c-status').innerHTML = `<div class="callout bad"><p>${esc(res.error)}</p>
+      <p class="muted" style="font-size:12px">Paste either a catalogue table including its header row,
+        or a product page's specification list.</p></div>`;
     return;
   }
-  const usable = res.springs.filter((s) => !s.incomplete);
   addLocal(res.springs);
-
-  const mapped = res.mapping.filter((m) => m.field);
-  status.innerHTML = `<div class="callout ${usable.length ? '' : 'warn'}">
-    <p>Parsed <strong>${res.rows.length}</strong> rows &rarr; <strong>${usable.length}</strong> usable
-      ${res.springs.length - usable.length ? `, ${res.springs.length - usable.length} short of data` : ''}
-      ${res.skipped.length ? `, ${res.skipped.length} lines ignored` : ''}.</p>
-    <p class="muted" style="font-size:12px">Columns read: ${mapped.map((m) => `${esc(m.header)} &rarr; ${m.field}`).join(', ') || 'none'}
-      ${res.unmapped.length ? `<br>Ignored: ${res.unmapped.map((m) => esc(m.header)).join(', ')}` : ''}</p>
-  </div>`;
+  renderImportReview(res, res.springs);
+  if (res.springs.length) $('c-part').value = '';
 }
 
 $('c-import').addEventListener('click', () =>

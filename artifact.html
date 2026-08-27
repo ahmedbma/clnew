@@ -231,21 +231,41 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
 <section class="panel" id="tab-catalog" hidden>
   <div class="card">
     <h2>Load real vendor data</h2>
-    <p class="hint" style="margin-top:-6px">
-      On <a href="https://www.mcmaster.com/products/compression-springs/" target="_blank" rel="noopener">mcmaster.com</a>
-      filter the compression-spring table down to what you are after, select the table in the browser,
-      copy, and paste it below. The header row matters &mdash; it is what tells the parser which column is which.
-      CSV works too, as does a metric table if you switch the units.</p>
+    <p class="hint" style="margin-top:-6px">Paste either kind, from
+      <a href="https://www.mcmaster.com/products/compression-springs/" target="_blank" rel="noopener">mcmaster.com</a>
+      or anywhere else. It works out which it got.</p>
+    <ul class="notes" style="margin-top:6px">
+      <li><strong>A results table</strong> &mdash; select it in the browser and copy, header row included.
+        The header is what names the columns. CSV works too.</li>
+      <li><strong>One product page's specifications</strong> &mdash; the list of labels and values down the
+        page. Copy the whole thing, boilerplate and all; the compliance and country-of-origin lines get
+        dropped. A missing part number is fine &mdash; the spring gets named from its dimensions.</li>
+    </ul>
     <p class="hint" style="margin-top:-8px">Springs you paste are saved in <strong>this browser</strong> and
       stay until you clear them. To make a list everyone sees on their first visit, in any browser:
       <strong>Download as JSON</strong> and commit the file over
       <code>data/catalogue.json</code> in the repository.</p>
-    <textarea id="c-paste" placeholder="Part #&#9;OD&#9;ID&#9;Wire Dia.&#9;Lg.&#9;Spring Rate, lbs./in.&#9;Material&#9;Ends
-9657K304&#9;0.36&quot;&#9;0.296&quot;&#9;0.032&quot;&#9;0.471&quot;&#9;4.5&#9;Zinc-Plated Music Wire&#9;Closed &amp; Ground"></textarea>
+    <textarea id="c-paste" placeholder="Either a table...
+
+Part #&#9;OD&#9;ID&#9;Wire Dia.&#9;Lg.&#9;Spring Rate, lbs./in.&#9;Material&#9;Ends
+9657K304&#9;0.36&quot;&#9;0.296&quot;&#9;0.032&quot;&#9;0.471&quot;&#9;4.5&#9;Zinc-Plated Music Wire&#9;Closed &amp; Ground
+
+...or one product page's specifications:
+
+Material&#9;Cobalt Nickel
+Length&#9;0.05&quot;
+OD&#9;0.025&quot;
+Wire Diameter&#9;0.005&quot;
+Compressed Length @ Maximum Load&#9;0.037&quot;
+Maximum Load&#9;0.2 lb.
+Spring Rate&#9;15 lbf/in
+End Type&#9;Closed"></textarea>
     <div class="grid" style="margin-top:12px">
       <div><label for="c-vendor">Vendor</label><input id="c-vendor" value="McMaster-Carr"></div>
       <div><label for="c-units">Table units</label>
         <select id="c-units"><option value="us">inch &amp; lbs./in.</option><option value="si">mm &amp; N/mm</option></select></div>
+      <div><label for="c-part">Part number, if the page omitted one</label>
+        <input id="c-part" placeholder="optional"></div>
       <div><label for="c-mode">On import</label>
         <select id="c-mode"><option value="append">add to what is loaded</option><option value="replace">replace my springs</option></select></div>
     </div>
@@ -439,6 +459,19 @@ const MATERIALS = {
     G_GPa: 48.3, E_GPa: 128.0, tauFrac: 0.35, tauFracSet: 0.50,
     sut: [{ dMax: 7.5, A: 1240, m: 0, approx: true }],
     aliases: ['beryllium copper', 'beryllium-copper', 'becu', 'b197'],
+  },
+  'cobalt-nickel': {
+    name: 'Cobalt-nickel alloy (Elgiloy / MP35N type)',
+    G_GPa: 76.0, E_GPa: 193.0, tauFrac: 0.35, tauFracSet: 0.50,
+    sut: [{ dMax: 7.5, A: 2200, m: 0.10, approx: true }],
+    aliases: ['cobalt nickel', 'cobalt-nickel', 'elgiloy', 'mp35n', 'conichrome',
+      'cobalt chromium', 'co-cr-ni'],
+  },
+  'monel-400': {
+    name: 'Monel 400 (nickel-copper)',
+    G_GPa: 65.5, E_GPa: 179.0, tauFrac: 0.35, tauFracSet: 0.50,
+    sut: [{ dMax: 7.5, A: 1100, m: 0, approx: true }],
+    aliases: ['monel', 'nickel-copper', 'nickel copper', 'monel 400'],
   },
   'inconel-x750': {
     name: 'Inconel X-750',
@@ -680,6 +713,11 @@ function normalizeSpring(raw) {
 
   s.meanDia_mm = meanDiameter(od, d);
   s.springIndex = springIndex(s.meanDia_mm, d);
+  if (s.nonLinearShape) {
+    warnings.push(`Listed as "${s.nonLinearShape}" rather than a straight cylindrical spring. `
+      + `Conical, barrel and hourglass springs stiffen as their coils close, so the constant rate `
+      + `this calculator assumes will understate the force near the end of travel.`);
+  }
   if (s.springIndex < 4) warnings.push(`Spring index C=${s.springIndex.toFixed(1)} is below 4 - tightly wound, high stress concentration, hard to manufacture.`);
   if (s.springIndex > 14) warnings.push(`Spring index C=${s.springIndex.toFixed(1)} is above 14 - loose, prone to tangling and buckling.`);
 
@@ -719,16 +757,43 @@ function normalizeSpring(raw) {
   if (L0 != null && Ls != null) {
     s.travelToSolid_mm = L0 - Ls;
     if (s.travelToSolid_mm <= 0) {
-      warnings.push('Derived solid length exceeds free length - the input data is inconsistent.');
+      // Blame the right thing: when the coil count came from inverting a
+      // published rate, the shear modulus is the shaky input, not the vendor.
+      warnings.push(derived.includes('solidLength_mm') && derived.includes('activeCoils')
+        ? `Coil count worked back from the published rate puts the solid length past the free length. `
+          + `That normally means the shear modulus assumed for ${getMaterial(s.materialKey).name} `
+          + `is off for this wire, not that the listing is wrong. Solid length is left unknown; `
+          + `vendor travel figures are used instead where they exist.`
+        : 'Solid length exceeds free length - the input data is inconsistent.');
       s.travelToSolid_mm = null;
+      s.solidLength_mm = null;
+      Ls = null;
     }
   }
 
   // Usable travel. Prefer what the vendor rates; otherwise take a fraction of
   // travel-to-solid, because running a stock spring to solid is where it
   // takes a set and stops being the spring you specified.
-  const vendorMaxDefl = num(s.maxDeflection_mm);
+  let vendorMaxDefl = num(s.maxDeflection_mm);
   const vendorMaxLoad = num(s.maxLoad_N);
+
+  // Vendors often publish "compressed length at maximum load" rather than a
+  // deflection. That length is authoritative -- it beats anything derived
+  // from an assumed shear modulus.
+  const atMaxLoad = num(s.lengthAtMaxLoad_mm);
+  if (vendorMaxDefl == null && atMaxLoad != null && L0 != null && atMaxLoad < L0) {
+    vendorMaxDefl = L0 - atMaxLoad;
+    s.maxDeflection_mm = vendorMaxDefl;
+    derived.push('maxDeflection_mm');
+  }
+  // Cross-check the vendor against itself: rate x travel should be max load.
+  if (vendorMaxDefl != null && vendorMaxLoad != null) {
+    const implied = k * vendorMaxDefl;
+    const err = (implied - vendorMaxLoad) / vendorMaxLoad;
+    if (Math.abs(err) > 0.15) {
+      warnings.push(`Published max load and travel disagree by ${(err * 100).toFixed(0)}% at the published rate - check the figures.`);
+    }
+  }
   if (vendorMaxDefl != null) {
     s.usableTravel_mm = vendorMaxDefl;
     s.usableTravelSource = 'vendor max deflection';
@@ -777,7 +842,9 @@ function evaluate(springIn, opts = {}) {
   const {
     targetForce_N,
     positionTol_mm = 0.25,
-    rateTol = 0.10,
+    // A spring that publishes its own rate tolerance knows better than any
+    // blanket default.
+    rateTol = s.rateTol ?? 0.10,
     freeLengthTol_mm = 0,
     endCondition = 'fixed-fixed',
     setRemoved = false,
@@ -1392,7 +1459,257 @@ function fromCatalogJson(json) {
 const MATERIAL_OPTIONS = Object.entries(MATERIALS).map(([key, m]) => ({ key, name: m.name }));
 const END_OPTIONS = Object.entries(END_TYPES).map(([key, e]) => ({ key, name: e.name }));
 
-return { parseNumber, detectUnit, toMm, toNewtons, toNewtonsPerMm, mapHeader, parseTable, rowsToSprings, importTable, springFromForm, toCatalogJson, fromCatalogJson, MATERIAL_OPTIONS, END_OPTIONS };
+/* ------------------------------------------------ vertical spec sheets */
+
+/**
+ * A vendor product page lists ONE spring as label/value pairs down the page
+ * rather than as a table row. Order matters here: the first pattern that
+ * matches a label wins, so "OD Tolerance" must be tested before "OD", and
+ * "Compressed Length @ Maximum Load" before "Maximum Load".
+ */
+const SPEC_LABELS = [
+  ['partNumber', /^part\s*(#|number|no\b)|^mcmaster|^item\s*(#|no)|^catalog(ue)?\s*(#|number)/],
+  ['odTolerance', /^od\s*tol|outside\s*dia.*tol/],
+  ['idTolerance', /^id\s*tol|inside\s*dia.*tol/],
+  ['rateTolerance', /rate\s*tol/],
+  ['lengthTolerance', /^length\s*tol|free\s*length\s*tol/],
+  ['lengthAtMaxLoad', /compressed\s*(length|lg|height)/],
+  ['solidLength', /^solid\s*(length|height)/],
+  ['maxDeflection', /^(max|maximum)\.?\s*(deflection|travel|compression|stroke)/],
+  ['maxLoad', /^(max|maximum)\.?\s*(load|force)|^load\s*(at|@)\s*max/],
+  ['maxTemperature', /^(max|maximum)\.?\s*temp/],
+  ['wireDia', /^wire\s*(dia|diameter|size|gauge)/],
+  ['od', /^(od|outside\s*dia(meter)?|outer\s*dia(meter)?)\s*$/],
+  ['id', /^(id|inside\s*dia(meter)?|inner\s*dia(meter)?)\s*$/],
+  ['freeLength', /^(free\s*)?(length|lg|overall\s*length|uncompressed\s*length)\s*$/],
+  ['rate', /^spring\s*rate\s*$|^rate\s*$/],
+  ['totalCoils', /coils/],
+  ['springType', /^spring\s*type\s*$/],
+  ['coilShape', /^compression\s*spring\s*type|^(coil\s*)?shape\s*$|^body\s*(type|style)/],
+  ['ends', /^(end\s*type|ends)\s*$/],
+  ['material', /^material\s*$|^alloy\s*$/],
+  ['finish', /^(finish|plating|coating)\s*$/],
+  ['system', /^system\s*of\s*measurement/],
+];
+
+function matchSpecLabel(label) {
+  const l = String(label || '').toLowerCase().replace(/[.:]+$/, '').trim();
+  for (const [field, re] of SPEC_LABELS) if (re.test(l)) return field;
+  return null;
+}
+
+/** Split a paste into label/value pairs, one array entry per line. */
+function specPairs(text) {
+  const out = [];
+  for (const raw of String(text).replace(/\r\n?/g, '\n').split('\n')) {
+    const line = raw.trim();
+    if (!line) { out.push(null); continue; } // blank line = possible block break
+    let cells;
+    if (line.includes('\t')) cells = line.split('\t');
+    else if (/\s{2,}/.test(line)) cells = line.split(/\s{2,}/);
+    else if (line.includes(':')) cells = [line.slice(0, line.indexOf(':')), line.slice(line.indexOf(':') + 1)];
+    else continue;
+    const label = cells[0].trim();
+    const value = cells.slice(1).join(' ').trim();
+    if (label && value) out.push({ label, value });
+  }
+  return out;
+}
+
+/**
+ * Does this paste look like one or more product spec sheets rather than a
+ * table? Spec sheets are two columns wide with recognisable labels down the
+ * left; tables have a header row and many columns.
+ */
+function looksLikeSpecSheet(text) {
+  const pairs = specPairs(text).filter(Boolean);
+  if (pairs.length < 3) return false;
+  const known = pairs.filter((p) => matchSpecLabel(p.label)).length;
+  const lines = String(text).split('\n').filter((l) => l.trim()).length;
+  // Most lines parsed as a pair, and enough of them are labels we know.
+  return pairs.length >= lines * 0.6 && known >= 3;
+}
+
+/**
+ * Break a paste into one block per spring. A blank line separates blocks,
+ * and so does a label repeating -- pasting two sheets back to back with no
+ * gap is the common case.
+ */
+function specBlocks(text) {
+  const blocks = [];
+  let current = [];
+  let seen = new Set();
+  const flush = () => { if (current.length) blocks.push(current); current = []; seen = new Set(); };
+  for (const pair of specPairs(text)) {
+    if (pair === null) { if (current.length) flush(); continue; }
+    const field = matchSpecLabel(pair.label);
+    const id = field || pair.label.toLowerCase();
+    if (seen.has(id)) flush();
+    seen.add(id);
+    current.push(pair);
+  }
+  flush();
+  return blocks;
+}
+
+/** Human-readable stand-in for a spring the vendor page did not name. */
+function describeSpring(s, unit = 'in') {
+  const fmt = (mm) => (mm == null ? '?' : unit === 'in' ? `${(mm / 25.4).toFixed(3)}"` : `${mm.toFixed(2)}mm`);
+  return `${fmt(s.od_mm)} OD x ${fmt(s.wireDia_mm)} wire x ${fmt(s.freeLength_mm)} long`;
+}
+
+/**
+ * Turn one spec-sheet block into a spring. Returns {spring, read, ignored,
+ * rejected} so the UI can show exactly what was understood -- the part that
+ * makes pasting trustworthy rather than a leap of faith.
+ */
+function specBlockToSpring(pairs, opts = {}) {
+  const raw = {};
+  const read = [];
+  const ignored = [];
+  const notes = [];
+  let rejected = null;
+
+  const f = {};
+  for (const { label, value } of pairs) {
+    const field = matchSpecLabel(label);
+    if (!field) { ignored.push(label); continue; }
+    if (f[field] == null) f[field] = { label, value };
+  }
+
+  // The sheet usually states its own unit system; trust it over the default.
+  const inch = f.system ? /inch|imperial|us/i.test(f.system.value) : (opts.lengthUnit || 'in') === 'in';
+  const lu = inch ? 'in' : 'mm';
+  const fu = inch ? 'lbf' : 'N';
+  const ru = inch ? 'lbf/in' : 'N/mm';
+
+  if (f.springType) {
+    if (!/compress/i.test(f.springType.value)) {
+      const kind = f.springType.value.toLowerCase();
+      rejected = `This is ${/^[aeiou]/.test(kind) ? 'an' : 'a'} ${kind} spring. The calculator only handles compression springs.`;
+    } else {
+      read.push({ label: f.springType.label, value: f.springType.value, field: 'type', note: 'confirmed a compression spring' });
+    }
+  }
+  // A conical, barrel or hourglass spring does not have a constant rate --
+  // coils close progressively -- so the linear model here would be wrong.
+  if (f.coilShape) {
+    const straight = /straight|cylindric|constant/i.test(f.coilShape.value);
+    read.push({ label: f.coilShape.label, value: f.coilShape.value, field: 'coilShape',
+      note: straight ? 'constant diameter, so the rate is linear' : null });
+    if (!straight) {
+      notes.push(`Listed as "${f.coilShape.value}"`);
+      raw.nonLinearShape = f.coilShape.value;
+    }
+  }
+  if (f.system) {
+    read.push({ label: f.system.label, value: f.system.value, field: 'units',
+      note: `figures read as ${inch ? 'inches and pounds' : 'millimetres and newtons'}` });
+  }
+
+  const take = (key, target, conv, unit) => {
+    if (!f[key]) return;
+    const v = conv(f[key].value, unit);
+    // The finiteness check belongs to numeric fields only -- a part number is
+    // a string and must not be thrown away for failing it.
+    if (v == null) return;
+    if (typeof v === 'number' && !Number.isFinite(v)) return;
+    if (typeof v === 'string' && !v.trim()) return;
+    raw[target] = v;
+    read.push({ label: f[key].label, value: f[key].value, field: target });
+  };
+
+  take('partNumber', 'partNumber', (v) => v.replace(/\s+/g, ''));
+  if (raw.partNumber != null && !/[a-z0-9]/i.test(String(raw.partNumber))) delete raw.partNumber;
+  take('od', 'od_mm', toMm, lu);
+  take('id', 'id_mm', toMm, lu);
+  take('wireDia', 'wireDia_mm', toMm, lu);
+  take('freeLength', 'freeLength_mm', toMm, lu);
+  take('solidLength', 'solidLength_mm', toMm, lu);
+  take('lengthAtMaxLoad', 'lengthAtMaxLoad_mm', toMm, lu);
+  take('maxDeflection', 'maxDeflection_mm', toMm, lu);
+  take('maxLoad', 'maxLoad_N', toNewtons, fu);
+  take('rate', 'rate_Npmm', toNewtonsPerMm, ru);
+  take('totalCoils', 'totalCoils', (v) => parseNumber(v));
+
+  // Tolerances come as a signed range; the half-band is what matters.
+  if (f.rateTolerance && raw.rate_Npmm) {
+    const band = Math.abs(toNewtonsPerMm(f.rateTolerance.value, ru) || 0);
+    if (band > 0) {
+      raw.rateTol = band / raw.rate_Npmm;
+      read.push({ label: f.rateTolerance.label, value: f.rateTolerance.value, field: 'rateTol',
+        note: `+/-${(raw.rateTol * 100).toFixed(1)}% of rate` });
+    }
+  }
+  if (f.odTolerance) {
+    const band = Math.abs(toMm(f.odTolerance.value, lu) || 0);
+    if (band > 0) { raw.odTol_mm = band; read.push({ label: f.odTolerance.label, value: f.odTolerance.value, field: 'odTol_mm' }); }
+  }
+
+  const materialText = [f.material?.value, f.finish?.value].filter(Boolean).join(' ');
+  if (materialText) {
+    raw.material = materialText;
+    const key = resolveMaterial(materialText);
+    if (key) raw.materialKey = key;
+    read.push({ label: f.material?.label || 'Material', value: materialText, field: 'material',
+      note: key ? null : 'not a material the calculator knows - see the warning on the spring' });
+  }
+  if (f.ends) {
+    raw.ends = f.ends.value;
+    const key = resolveEnds(f.ends.value);
+    if (key) raw.endsKey = key;
+    read.push({ label: f.ends.label, value: f.ends.value, field: 'ends' });
+  }
+  if (f.maxTemperature) {
+    notes.push(`Max temperature ${f.maxTemperature.value}`);
+    read.push({ label: f.maxTemperature.label, value: f.maxTemperature.value, field: 'note',
+      note: 'kept as a note; it does not enter the calculation' });
+  }
+
+  raw.vendor = opts.vendor || null;
+  raw.type = 'compression';
+  raw.provenance = 'spec-sheet-import';
+  raw.source = opts.source || 'pasted spec sheet';
+  if (raw.partNumber && opts.urlTemplate) raw.url = opts.urlTemplate.replace('{part}', encodeURIComponent(raw.partNumber));
+  if (!raw.partNumber && opts.partNumber) raw.partNumber = String(opts.partNumber).trim();
+  if (notes.length) raw.notes = notes.join('; ');
+
+  const spring = normalizeSpring(raw);
+  // A page that never named the part still needs something to be called.
+  if (!spring.partNumber) spring.label = describeSpring(spring, lu);
+  return { spring, read, ignored, rejected, unitSystem: lu };
+}
+
+/** Parse a paste of one or more spec sheets. */
+function importSpecSheets(text, opts = {}) {
+  const blocks = specBlocks(text).filter((b) => b.length >= 3);
+  const results = blocks.map((b, i) => specBlockToSpring(b, {
+    ...opts,
+    // A hand-typed part number applies only when a single sheet was pasted.
+    partNumber: blocks.length === 1 ? opts.partNumber : null,
+    source: `${opts.source || 'pasted spec sheet'}${blocks.length > 1 ? ` (${i + 1} of ${blocks.length})` : ''}`,
+  }));
+  return {
+    format: 'spec-sheet',
+    blocks: results,
+    springs: results.filter((r) => !r.rejected).map((r) => r.spring),
+    rejected: results.filter((r) => r.rejected),
+  };
+}
+
+/**
+ * One entry point for anything a user pastes: a catalogue table, or one or
+ * more product spec sheets. Detection is automatic and reported back, so a
+ * misread is visible rather than silent.
+ */
+function importAny(text, opts = {}) {
+  if (!String(text || '').trim()) return { format: 'empty', springs: [], error: 'Nothing pasted.' };
+  if (looksLikeSpecSheet(text)) return importSpecSheets(text, opts);
+  const table = importTable(text, opts);
+  return { ...table, format: 'table' };
+}
+
+return { parseNumber, detectUnit, toMm, toNewtons, toNewtonsPerMm, mapHeader, parseTable, rowsToSprings, importTable, springFromForm, toCatalogJson, fromCatalogJson, MATERIAL_OPTIONS, END_OPTIONS, looksLikeSpecSheet, describeSpring, specBlockToSpring, importSpecSheets, importAny };
 })();
 
 /**
@@ -1420,6 +1737,8 @@ const state = {
  * Identity of a spring across the shared list and a local one, so a locally
  * edited part supersedes the shipped row rather than duplicating it.
  */
+const springName = (s) => s.partNumber || s.label || '—';
+
 const springKey = (s) => (s.partNumber
   ? `${(s.vendor || '').toLowerCase().trim()}|${String(s.partNumber).toLowerCase().replace(/\s+/g, '')}`
   : `geom|${[s.od_mm, s.wireDia_mm, s.freeLength_mm, s.rate_Npmm]
@@ -1621,7 +1940,7 @@ function renderReport(s, ev) {
     : '';
 
   return `<div class="card">
-    <h2>${esc(s.partNumber || 'Spring')} ${verdict}</h2>
+    <h2>${esc(s.partNumber || s.label || 'Spring')} ${verdict}</h2>
     ${s.url ? `<p class="hint" style="margin-top:-8px"><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.url)}</a></p>` : ''}
     <div class="cols">
       <div><h3 style="margin-top:0">The spring</h3>${specList(s)}</div>
@@ -1856,7 +2175,7 @@ function renderResults(req) {
     const sev = severity(w?.travelUsedFraction);
     return `<tr data-i="${i}" class="${h.ok ? '' : 'rejected'}">
       <td class="l">${h.ok ? badge(sev, sev === 'ok' ? 'fits' : sev === 'warn' ? 'tight' : 'at limit') : badge('bad', 'no')}</td>
-      <td class="l">${esc(h.spring.partNumber || '—')}</td>
+      <td class="l">${esc(springName(h.spring))}</td>
       <td class="num">${Lnum(h.spring.od_mm)}</td>
       <td class="num">${Lnum(h.spring.freeLength_mm)}</td>
       <td class="num">${nf(sm.nPerMmToLbfPerIn(h.spring.rate_Npmm), 2)}</td>
@@ -1991,7 +2310,7 @@ function renderCatalogue() {
 
   const rows = state.catalogue.map((s) => `<tr>
     <td class="l">${s._origin === 'shared' ? badge('ok', 'shipped') : badge('warn', 'yours')}</td>
-    <td class="l">${esc(s.partNumber || '—')}</td>
+    <td class="l">${esc(springName(s))}</td>
     <td class="l muted">${esc(s.vendor || '')}</td>
     <td class="num">${Lnum(s.od_mm)}</td>
     <td class="num">${Lnum(s.wireDia_mm)}</td>
@@ -2026,30 +2345,74 @@ function wireCatalogueButtons() {
   $('c-restore').hidden = state.hidden.size === 0;
 }
 
+/**
+ * Show exactly what the paste was understood to mean. Pasting data into a
+ * calculator is an act of trust; this is the receipt.
+ */
+function renderImportReview(res, added) {
+  const status = $('c-status');
+  const bits = [];
+
+  if (res.format === 'spec-sheet') {
+    const blocks = res.blocks;
+    const good = blocks.filter((b) => !b.rejected);
+    bits.push(`<div class="callout ${good.length ? '' : 'bad'}">
+      <p>Read as ${blocks.length === 1 ? 'a product spec sheet' : `${blocks.length} product spec sheets`}
+        &mdash; the label-and-value kind from a vendor product page, not a table.
+        ${good.length ? `<strong>${good.length} spring${good.length === 1 ? '' : 's'} added.</strong>` : 'Nothing added.'}</p>
+      ${res.rejected.map((r) => `<p>${esc(r.rejected)}</p>`).join('')}
+    </div>`);
+
+    for (const b of good) {
+      const s = b.spring;
+      const derived = (s.derived || []).filter((d) => !d.endsWith('Key'));
+      bits.push(`<h3>${esc(springName(s))}${s.partNumber ? '' : ' <span class="derived">named from its dimensions &mdash; the page gave no part number</span>'}</h3>
+        <div class="scroll"><table>
+          <thead><tr><th class="l">on the page</th><th class="l">value</th><th class="l">used as</th></tr></thead>
+          <tbody>${b.read.map((r) => `<tr>
+            <td class="l">${esc(r.label)}</td>
+            <td class="l num">${esc(r.value)}</td>
+            <td class="l muted">${esc(r.field)}${r.note ? ` &mdash; ${esc(r.note)}` : ''}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+        ${derived.length ? `<p class="hint">Worked out from those: ${derived.map((d) => `<code>${esc(d)}</code>`).join(' ')}</p>` : ''}
+        ${b.ignored.length ? `<p class="hint">Ignored, not spring data: ${b.ignored.map(esc).join(', ')}</p>` : ''}
+        ${s.warnings.length ? `<ul class="notes">${s.warnings.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}`);
+    }
+    status.innerHTML = bits.join('');
+    return;
+  }
+
+  const mapped = res.mapping.filter((m) => m.field);
+  const usable = added.filter((s) => !s.incomplete);
+  status.innerHTML = `<div class="callout ${usable.length ? '' : 'warn'}">
+    <p>Read as a catalogue table. Parsed <strong>${res.rows.length}</strong> rows &rarr;
+      <strong>${usable.length}</strong> usable
+      ${added.length - usable.length ? `, ${added.length - usable.length} short of data` : ''}
+      ${res.skipped.length ? `, ${res.skipped.length} lines ignored` : ''}.</p>
+    <p class="muted" style="font-size:12px">Columns read: ${mapped.map((m) => `${esc(m.header)} &rarr; ${m.field}`).join(', ') || 'none'}
+      ${res.unmapped.length ? `<br>Ignored: ${res.unmapped.map((m) => esc(m.header)).join(', ')}` : ''}</p>
+  </div>`;
+}
+
 function importText(text, { vendor, us }) {
-  const res = cat.importTable(text, {
+  const res = cat.importAny(text, {
     vendor,
+    partNumber: $('c-part').value.trim() || null,
     lengthUnit: us ? 'in' : 'mm',
     rateUnit: us ? 'lbf/in' : 'N/mm',
     forceUnit: us ? 'lbf' : 'N',
     urlTemplate: /mcmaster/i.test(vendor) ? 'https://www.mcmaster.com/{part}/' : null,
   });
-  const status = $('c-status');
   if (res.error) {
-    status.innerHTML = `<div class="callout bad"><p>${esc(res.error)}</p></div>`;
+    $('c-status').innerHTML = `<div class="callout bad"><p>${esc(res.error)}</p>
+      <p class="muted" style="font-size:12px">Paste either a catalogue table including its header row,
+        or a product page's specification list.</p></div>`;
     return;
   }
-  const usable = res.springs.filter((s) => !s.incomplete);
   addLocal(res.springs);
-
-  const mapped = res.mapping.filter((m) => m.field);
-  status.innerHTML = `<div class="callout ${usable.length ? '' : 'warn'}">
-    <p>Parsed <strong>${res.rows.length}</strong> rows &rarr; <strong>${usable.length}</strong> usable
-      ${res.springs.length - usable.length ? `, ${res.springs.length - usable.length} short of data` : ''}
-      ${res.skipped.length ? `, ${res.skipped.length} lines ignored` : ''}.</p>
-    <p class="muted" style="font-size:12px">Columns read: ${mapped.map((m) => `${esc(m.header)} &rarr; ${m.field}`).join(', ') || 'none'}
-      ${res.unmapped.length ? `<br>Ignored: ${res.unmapped.map((m) => esc(m.header)).join(', ')}` : ''}</p>
-  </div>`;
+  renderImportReview(res, res.springs);
+  if (res.springs.length) $('c-part').value = '';
 }
 
 $('c-import').addEventListener('click', () =>

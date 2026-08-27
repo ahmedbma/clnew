@@ -236,21 +236,41 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
 <section class="panel" id="tab-catalog" hidden>
   <div class="card">
     <h2>Load real vendor data</h2>
-    <p class="hint" style="margin-top:-6px">
-      On <a href="https://www.mcmaster.com/products/compression-springs/" target="_blank" rel="noopener">mcmaster.com</a>
-      filter the compression-spring table down to what you are after, select the table in the browser,
-      copy, and paste it below. The header row matters &mdash; it is what tells the parser which column is which.
-      CSV works too, as does a metric table if you switch the units.</p>
+    <p class="hint" style="margin-top:-6px">Paste either kind, from
+      <a href="https://www.mcmaster.com/products/compression-springs/" target="_blank" rel="noopener">mcmaster.com</a>
+      or anywhere else. It works out which it got.</p>
+    <ul class="notes" style="margin-top:6px">
+      <li><strong>A results table</strong> &mdash; select it in the browser and copy, header row included.
+        The header is what names the columns. CSV works too.</li>
+      <li><strong>One product page's specifications</strong> &mdash; the list of labels and values down the
+        page. Copy the whole thing, boilerplate and all; the compliance and country-of-origin lines get
+        dropped. A missing part number is fine &mdash; the spring gets named from its dimensions.</li>
+    </ul>
     <p class="hint" style="margin-top:-8px">Springs you paste are saved in <strong>this browser</strong> and
       stay until you clear them. To make a list everyone sees on their first visit, in any browser:
       <strong>Download as JSON</strong> and commit the file over
       <code>data/catalogue.json</code> in the repository.</p>
-    <textarea id="c-paste" placeholder="Part #&#9;OD&#9;ID&#9;Wire Dia.&#9;Lg.&#9;Spring Rate, lbs./in.&#9;Material&#9;Ends
-9657K304&#9;0.36&quot;&#9;0.296&quot;&#9;0.032&quot;&#9;0.471&quot;&#9;4.5&#9;Zinc-Plated Music Wire&#9;Closed &amp; Ground"></textarea>
+    <textarea id="c-paste" placeholder="Either a table...
+
+Part #&#9;OD&#9;ID&#9;Wire Dia.&#9;Lg.&#9;Spring Rate, lbs./in.&#9;Material&#9;Ends
+9657K304&#9;0.36&quot;&#9;0.296&quot;&#9;0.032&quot;&#9;0.471&quot;&#9;4.5&#9;Zinc-Plated Music Wire&#9;Closed &amp; Ground
+
+...or one product page's specifications:
+
+Material&#9;Cobalt Nickel
+Length&#9;0.05&quot;
+OD&#9;0.025&quot;
+Wire Diameter&#9;0.005&quot;
+Compressed Length @ Maximum Load&#9;0.037&quot;
+Maximum Load&#9;0.2 lb.
+Spring Rate&#9;15 lbf/in
+End Type&#9;Closed"></textarea>
     <div class="grid" style="margin-top:12px">
       <div><label for="c-vendor">Vendor</label><input id="c-vendor" value="McMaster-Carr"></div>
       <div><label for="c-units">Table units</label>
         <select id="c-units"><option value="us">inch &amp; lbs./in.</option><option value="si">mm &amp; N/mm</option></select></div>
+      <div><label for="c-part">Part number, if the page omitted one</label>
+        <input id="c-part" placeholder="optional"></div>
       <div><label for="c-mode">On import</label>
         <select id="c-mode"><option value="append">add to what is loaded</option><option value="replace">replace my springs</option></select></div>
     </div>

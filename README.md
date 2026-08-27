@@ -47,6 +47,23 @@ full quota) the page now says so instead of failing quietly.
 There is no spring catalogue in this repo, on purpose. Guessed part numbers get
 ordered. Instead:
 
+Two paste formats are accepted, told apart automatically:
+
+* **A results table** — header row included; that row names the columns. CSV too.
+* **One product page's specification list** — the vertical label/value block.
+  Compliance, country-of-origin and export-control lines are dropped; the rest is
+  read, including the ones that carry real information and are easy to mishandle:
+  *Compressed Length @ Maximum Load* becomes usable travel (it beats anything
+  derived from an assumed shear modulus), *Spring Rate Tolerance* replaces the
+  blanket ±10% default for that spring, *System of Measurement* sets the units,
+  and *Compression Spring Type* warns when a conical or barrel spring would break
+  the constant-rate assumption. An extension or torsion spring is refused rather
+  than silently mis-modelled. A sheet with no part number still imports — the
+  spring is named from its dimensions. Several sheets can be pasted at once.
+
+Either way the import prints back exactly what it read, what it worked out, and
+what it ignored, field by field.
+
 * **Paste the vendor's own table.** On mcmaster.com, filter the compression-spring
   table to what you want, select it in the browser, copy, and paste into the
   Catalogue tab. Include the header row — it's what maps the columns. CSV works

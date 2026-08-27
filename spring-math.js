@@ -112,6 +112,19 @@ export const MATERIALS = {
     sut: [{ dMax: 7.5, A: 1240, m: 0, approx: true }],
     aliases: ['beryllium copper', 'beryllium-copper', 'becu', 'b197'],
   },
+  'cobalt-nickel': {
+    name: 'Cobalt-nickel alloy (Elgiloy / MP35N type)',
+    G_GPa: 76.0, E_GPa: 193.0, tauFrac: 0.35, tauFracSet: 0.50,
+    sut: [{ dMax: 7.5, A: 2200, m: 0.10, approx: true }],
+    aliases: ['cobalt nickel', 'cobalt-nickel', 'elgiloy', 'mp35n', 'conichrome',
+      'cobalt chromium', 'co-cr-ni'],
+  },
+  'monel-400': {
+    name: 'Monel 400 (nickel-copper)',
+    G_GPa: 65.5, E_GPa: 179.0, tauFrac: 0.35, tauFracSet: 0.50,
+    sut: [{ dMax: 7.5, A: 1100, m: 0, approx: true }],
+    aliases: ['monel', 'nickel-copper', 'nickel copper', 'monel 400'],
+  },
   'inconel-x750': {
     name: 'Inconel X-750',
     G_GPa: 72.4, E_GPa: 213.7, tauFrac: 0.35, tauFracSet: 0.50,
@@ -352,6 +365,11 @@ export function normalizeSpring(raw) {
 
   s.meanDia_mm = meanDiameter(od, d);
   s.springIndex = springIndex(s.meanDia_mm, d);
+  if (s.nonLinearShape) {
+    warnings.push(`Listed as "${s.nonLinearShape}" rather than a straight cylindrical spring. `
+      + `Conical, barrel and hourglass springs stiffen as their coils close, so the constant rate `
+      + `this calculator assumes will understate the force near the end of travel.`);
+  }
   if (s.springIndex < 4) warnings.push(`Spring index C=${s.springIndex.toFixed(1)} is below 4 - tightly wound, high stress concentration, hard to manufacture.`);
   if (s.springIndex > 14) warnings.push(`Spring index C=${s.springIndex.toFixed(1)} is above 14 - loose, prone to tangling and buckling.`);
 
@@ -391,16 +409,43 @@ export function normalizeSpring(raw) {
   if (L0 != null && Ls != null) {
     s.travelToSolid_mm = L0 - Ls;
     if (s.travelToSolid_mm <= 0) {
-      warnings.push('Derived solid length exceeds free length - the input data is inconsistent.');
+      // Blame the right thing: when the coil count came from inverting a
+      // published rate, the shear modulus is the shaky input, not the vendor.
+      warnings.push(derived.includes('solidLength_mm') && derived.includes('activeCoils')
+        ? `Coil count worked back from the published rate puts the solid length past the free length. `
+          + `That normally means the shear modulus assumed for ${getMaterial(s.materialKey).name} `
+          + `is off for this wire, not that the listing is wrong. Solid length is left unknown; `
+          + `vendor travel figures are used instead where they exist.`
+        : 'Solid length exceeds free length - the input data is inconsistent.');
       s.travelToSolid_mm = null;
+      s.solidLength_mm = null;
+      Ls = null;
     }
   }
 
   // Usable travel. Prefer what the vendor rates; otherwise take a fraction of
   // travel-to-solid, because running a stock spring to solid is where it
   // takes a set and stops being the spring you specified.
-  const vendorMaxDefl = num(s.maxDeflection_mm);
+  let vendorMaxDefl = num(s.maxDeflection_mm);
   const vendorMaxLoad = num(s.maxLoad_N);
+
+  // Vendors often publish "compressed length at maximum load" rather than a
+  // deflection. That length is authoritative -- it beats anything derived
+  // from an assumed shear modulus.
+  const atMaxLoad = num(s.lengthAtMaxLoad_mm);
+  if (vendorMaxDefl == null && atMaxLoad != null && L0 != null && atMaxLoad < L0) {
+    vendorMaxDefl = L0 - atMaxLoad;
+    s.maxDeflection_mm = vendorMaxDefl;
+    derived.push('maxDeflection_mm');
+  }
+  // Cross-check the vendor against itself: rate x travel should be max load.
+  if (vendorMaxDefl != null && vendorMaxLoad != null) {
+    const implied = k * vendorMaxDefl;
+    const err = (implied - vendorMaxLoad) / vendorMaxLoad;
+    if (Math.abs(err) > 0.15) {
+      warnings.push(`Published max load and travel disagree by ${(err * 100).toFixed(0)}% at the published rate - check the figures.`);
+    }
+  }
   if (vendorMaxDefl != null) {
     s.usableTravel_mm = vendorMaxDefl;
     s.usableTravelSource = 'vendor max deflection';
@@ -449,7 +494,9 @@ export function evaluate(springIn, opts = {}) {
   const {
     targetForce_N,
     positionTol_mm = 0.25,
-    rateTol = 0.10,
+    // A spring that publishes its own rate tolerance knows better than any
+    // blanket default.
+    rateTol = s.rateTol ?? 0.10,
     freeLengthTol_mm = 0,
     endCondition = 'fixed-fixed',
     setRemoved = false,
