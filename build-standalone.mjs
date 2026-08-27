@@ -48,11 +48,16 @@ const bundle = [
 ].join('\n');
 
 const example = JSON.parse(read('./data/example-catalogue.json'));
+// The shared catalogue is fetched on the hosted site; a one-file build has
+// nothing to fetch from, so it travels inside the page.
+const shared = JSON.parse(read('./data/catalogue.json'));
 
 let html = read('./index.html');
 html = html.replace(
   '<script type="module" src="./app.js"></script>',
-  `<script>window.EXAMPLE_CATALOGUE = ${JSON.stringify(example)};</script>\n<script type="module">\n${bundle}\n</script>`,
+  `<script>window.EXAMPLE_CATALOGUE = ${JSON.stringify(example)};\n`
+  + `window.SHARED_CATALOGUE = ${JSON.stringify(shared)};</script>\n`
+  + `<script type="module">\n${bundle}\n</script>`,
 );
 // Nothing to fetch, so the "serve it over HTTP" advice no longer applies.
 html = html.replace(

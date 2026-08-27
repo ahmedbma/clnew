@@ -25,6 +25,23 @@ spring physically ends up (dF/dx = k). A stiff spring nudged slightly is a bad w
 to make a small force; a soft spring compressed a long way is a good one. Both
 contributions are broken out, worst case and RSS.
 
+## The shared catalogue
+
+`data/catalogue.json` is the list every visitor sees on their first visit, in any
+browser, with nothing to paste. It ships **empty** — no verified vendor data has
+been added to it yet.
+
+To fill it: paste a vendor table into the Catalogue tab, check the results, click
+**Download as JSON**, and commit that file over `data/catalogue.json`. Everyone
+gets it on their next visit.
+
+Springs a visitor pastes for themselves stay in their own browser and layer on top
+of the shared list, marked `yours` against the shared rows' `shipped`. They can
+hide a shipped spring locally without affecting anyone else, and restore it again.
+Browser storage has no expiry — it persists until they clear site data, switch
+browser, or switch device — and if the browser refuses to save (private window,
+full quota) the page now says so instead of failing quietly.
+
 ## No bundled vendor data
 
 There is no spring catalogue in this repo, on purpose. Guessed part numbers get
@@ -34,7 +51,10 @@ ordered. Instead:
   table to what you want, select it in the browser, copy, and paste into the
   Catalogue tab. Include the header row — it's what maps the columns. CSV works
   too, as do metric tables.
-* `data/example-catalogue.tsv` / `.json` are **synthetic**. They are
+* `data/catalogue.json` is the shared list described above, and is empty until
+  real data is committed to it.
+* `data/example-catalogue.tsv` / `.json` are **synthetic**, and load only when
+  someone clicks the example button — never automatically. They are
   geometrically self-consistent and fine for trying the tool, but the part numbers
   are made up. Don't order from them.
 

@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "name": "Shared catalogue",
+  "updated": null,
+  "units": "SI (mm, N, N/mm)",
+  "note": "Springs listed here load automatically for everyone who opens the site, in any browser, on their first visit -- no pasting needed. This is the curated list. To add to it: paste a vendor table into the Catalogue tab, click Download as JSON, and commit the result over this file. Starts empty because no verified vendor data has been added yet.",
+  "springs": []
+}

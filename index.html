@@ -241,6 +241,10 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
       filter the compression-spring table down to what you are after, select the table in the browser,
       copy, and paste it below. The header row matters &mdash; it is what tells the parser which column is which.
       CSV works too, as does a metric table if you switch the units.</p>
+    <p class="hint" style="margin-top:-8px">Springs you paste are saved in <strong>this browser</strong> and
+      stay until you clear them. To make a list everyone sees on their first visit, in any browser:
+      <strong>Download as JSON</strong> and commit the file over
+      <code>data/catalogue.json</code> in the repository.</p>
     <textarea id="c-paste" placeholder="Part #&#9;OD&#9;ID&#9;Wire Dia.&#9;Lg.&#9;Spring Rate, lbs./in.&#9;Material&#9;Ends
 9657K304&#9;0.36&quot;&#9;0.296&quot;&#9;0.032&quot;&#9;0.471&quot;&#9;4.5&#9;Zinc-Plated Music Wire&#9;Closed &amp; Ground"></textarea>
     <div class="grid" style="margin-top:12px">
@@ -248,14 +252,15 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
       <div><label for="c-units">Table units</label>
         <select id="c-units"><option value="us">inch &amp; lbs./in.</option><option value="si">mm &amp; N/mm</option></select></div>
       <div><label for="c-mode">On import</label>
-        <select id="c-mode"><option value="append">add to what is loaded</option><option value="replace">replace everything</option></select></div>
+        <select id="c-mode"><option value="append">add to what is loaded</option><option value="replace">replace my springs</option></select></div>
     </div>
     <div class="row">
       <button class="go" id="c-import">Parse and load</button>
       <button class="alt" id="c-example">Load example catalogue</button>
       <button class="alt" id="c-file">Open a .json / .csv file</button>
       <button class="alt" id="c-download">Download as JSON</button>
-      <button class="alt" id="c-clear">Clear</button>
+      <button class="alt" id="c-restore" hidden>Restore hidden springs</button>
+      <button class="alt" id="c-clear">Clear my additions</button>
       <input type="file" id="c-fileinput" accept=".json,.csv,.tsv,.txt" hidden>
     </div>
     <div id="c-status"></div>

@@ -10,10 +10,24 @@ const STORE_KEY = 'springcalc.catalog.v1';
 
 const state = {
   lengthUnit: 'in',
-  catalogue: [],
+  shared: [],        // shipped with the site, same for every visitor
+  sharedMeta: null,
+  local: [],         // this browser's own additions
+  hidden: new Set(), // shipped springs this browser has dismissed
+  catalogue: [],     // shared + local, merged for everything downstream
+  storeError: null,
   results: [],
   selected: null,
 };
+
+/**
+ * Identity of a spring across the shared list and a local one, so a locally
+ * edited part supersedes the shipped row rather than duplicating it.
+ */
+const springKey = (s) => (s.partNumber
+  ? `${(s.vendor || '').toLowerCase().trim()}|${String(s.partNumber).toLowerCase().replace(/\s+/g, '')}`
+  : `geom|${[s.od_mm, s.wireDia_mm, s.freeLength_mm, s.rate_Npmm]
+      .map((v) => (v == null ? '' : v.toFixed(4))).join(',')}`);
 
 /* ---------------------------------------------------------------- format */
 
@@ -68,12 +82,74 @@ document.querySelectorAll('nav.tabs button').forEach((b) => {
 function loadStore() {
   try {
     const raw = localStorage.getItem(STORE_KEY);
-    if (raw) state.catalogue = cat.fromCatalogJson(raw);
-  } catch (e) { /* private mode, corrupt payload -- start empty */ }
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    state.local = cat.fromCatalogJson(data);
+    state.hidden = new Set(Array.isArray(data.hidden) ? data.hidden : []);
+  } catch (e) {
+    state.local = [];
+    state.hidden = new Set();
+  }
 }
+
+/**
+ * Persist this browser's own springs. Storage can genuinely refuse -- a
+ * private window, or a full quota -- and a save that silently did nothing
+ * is the worst possible outcome here, so the failure is surfaced.
+ */
 function saveStore() {
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(cat.toCatalogJson(state.catalogue))); }
-  catch (e) { /* over quota or blocked; the session still works */ }
+  try {
+    const payload = cat.toCatalogJson(state.local);
+    payload.hidden = [...state.hidden];
+    localStorage.setItem(STORE_KEY, JSON.stringify(payload));
+    state.storeError = null;
+  } catch (e) {
+    state.storeError = e && /quota/i.test(e.name || e.message || '')
+      ? 'This browser is out of storage for the page, so your springs are NOT saved for next time. Download the catalogue as JSON to keep them.'
+      : 'This browser is blocking local storage (a private window will do it), so your springs are NOT saved for next time. Download the catalogue as JSON to keep them.';
+  }
+  return state.storeError;
+}
+
+/** The catalogue everything else reads: shipped rows, minus dismissals, with local ones on top. */
+function rebuildCatalogue() {
+  const byKey = new Map();
+  for (const spring of state.shared) {
+    const key = springKey(spring);
+    if (state.hidden.has(key)) continue;
+    byKey.set(key, { ...spring, _origin: 'shared' });
+  }
+  for (const spring of state.local) byKey.set(springKey(spring), { ...spring, _origin: 'local' });
+  state.catalogue = [...byKey.values()];
+}
+
+/** Load the catalogue committed alongside the site. Absent or empty is fine. */
+async function loadShared() {
+  try {
+    // The standalone build inlines it; the hosted site fetches it.
+    let payload = window.SHARED_CATALOGUE;
+    if (!payload) {
+      const r = await fetch('./data/catalogue.json');
+      if (!r.ok) return;
+      payload = await r.json();
+    }
+    state.shared = cat.fromCatalogJson(payload);
+    state.sharedMeta = { name: payload.name || 'Shared catalogue', updated: payload.updated || null };
+  } catch (e) {
+    state.shared = [];
+  }
+}
+
+/** Add springs the user just supplied, honouring the append/replace choice. */
+function addLocal(springs) {
+  if ($('c-mode').value === 'replace') {
+    state.local = [];
+    state.hidden = new Set();
+  }
+  state.local.push(...springs);
+  saveStore();
+  rebuildCatalogue();
+  renderCatalogue();
 }
 
 /* ------------------------------------------------------- select options */
@@ -493,7 +569,7 @@ $('a-units').addEventListener('change', () => {
 $('a-save').addEventListener('click', () => {
   const s = analyseSpring();
   if (s.incomplete) { runAnalyse(); return; }
-  state.catalogue.push(s); saveStore(); renderCatalogue();
+  state.local.push(s); saveStore(); rebuildCatalogue(); renderCatalogue();
   $('a-out').insertAdjacentHTML('afterbegin',
     `<div class="callout"><p>Added to the catalogue (${state.catalogue.length} springs).</p></div>`);
 });
@@ -502,11 +578,23 @@ $('a-save').addEventListener('click', () => {
 
 function renderCatalogue() {
   const box = $('c-list');
+  const shipped = state.catalogue.filter((x) => x._origin === 'shared').length;
+  const mine = state.catalogue.filter((x) => x._origin === 'local').length;
+
+  const warn = state.storeError
+    ? `<div class="callout bad"><p>${esc(state.storeError)}</p></div>` : '';
+  const hiddenNote = state.hidden.size
+    ? `<p class="hint">${state.hidden.size} shipped spring${state.hidden.size === 1 ? '' : 's'} hidden on this browser.</p>` : '';
+
   if (!state.catalogue.length) {
-    box.innerHTML = '<h2>Loaded springs</h2><p class="muted">Nothing loaded.</p>';
+    box.innerHTML = `<h2>Loaded springs</h2>${warn}
+      <p class="muted">Nothing loaded yet. Paste a vendor table above, or open a saved .json file.</p>${hiddenNote}`;
+    wireCatalogueButtons(box);
     return;
   }
-  const rows = state.catalogue.map((s, i) => `<tr>
+
+  const rows = state.catalogue.map((s) => `<tr>
+    <td class="l">${s._origin === 'shared' ? badge('ok', 'shipped') : badge('warn', 'yours')}</td>
     <td class="l">${esc(s.partNumber || '—')}</td>
     <td class="l muted">${esc(s.vendor || '')}</td>
     <td class="num">${Lnum(s.od_mm)}</td>
@@ -516,17 +604,30 @@ function renderCatalogue() {
     <td class="num">${Lnum(s.solidLength_mm)}</td>
     <td class="num">${F(s.maxUsableForce_N)}</td>
     <td class="l">${s.incomplete ? badge('bad', 'incomplete') : s.warnings.length ? badge('warn', String(s.warnings.length)) : ''}</td>
-    <td class="l"><button class="link" data-del="${i}">remove</button></td>
+    <td class="l"><button class="link" data-del="${esc(springKey(s))}" data-origin="${s._origin}">remove</button></td>
   </tr>`).join('');
-  box.innerHTML = `<h2>Loaded springs (${state.catalogue.length})</h2>
+
+  box.innerHTML = `<h2>Loaded springs (${state.catalogue.length})</h2>${warn}
+    <p class="hint" style="margin-top:-6px">${shipped} shipped with the site &mdash; everyone who opens
+      it sees these. ${mine} added on this browser only.</p>
     <div class="scroll"><table>
-      <thead><tr><th class="l">part</th><th class="l">vendor</th><th>OD ${Lunit()}</th><th>wire ${Lunit()}</th>
-        <th>free ${Lunit()}</th><th>rate lbf/in</th><th>solid ${Lunit()}</th><th>max load</th>
-        <th class="l"></th><th class="l"></th></tr></thead>
-      <tbody>${rows}</tbody></table></div>`;
+      <thead><tr><th class="l">source</th><th class="l">part</th><th class="l">vendor</th>
+        <th>OD ${Lunit()}</th><th>wire ${Lunit()}</th><th>free ${Lunit()}</th><th>rate lbf/in</th>
+        <th>solid ${Lunit()}</th><th>max load</th><th class="l"></th><th class="l"></th></tr></thead>
+      <tbody>${rows}</tbody></table></div>${hiddenNote}`;
+
   box.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => {
-    state.catalogue.splice(Number(b.dataset.del), 1); saveStore(); renderCatalogue();
+    const key = b.dataset.del;
+    // A shipped spring is not ours to delete -- hide it for this browser only.
+    if (b.dataset.origin === 'shared') state.hidden.add(key);
+    else state.local = state.local.filter((x) => springKey(x) !== key);
+    saveStore(); rebuildCatalogue(); renderCatalogue();
   }));
+  wireCatalogueButtons(box);
+}
+
+function wireCatalogueButtons() {
+  $('c-restore').hidden = state.hidden.size === 0;
 }
 
 function importText(text, { vendor, us }) {
@@ -542,10 +643,8 @@ function importText(text, { vendor, us }) {
     status.innerHTML = `<div class="callout bad"><p>${esc(res.error)}</p></div>`;
     return;
   }
-  if ($('c-mode').value === 'replace') state.catalogue = [];
   const usable = res.springs.filter((s) => !s.incomplete);
-  state.catalogue.push(...res.springs);
-  saveStore(); renderCatalogue();
+  addLocal(res.springs);
 
   const mapped = res.mapping.filter((m) => m.field);
   status.innerHTML = `<div class="callout ${usable.length ? '' : 'warn'}">
@@ -570,9 +669,7 @@ $('c-example').addEventListener('click', async () => {
       payload = await r.json();
     }
     const springs = cat.fromCatalogJson(payload);
-    if ($('c-mode').value === 'replace') state.catalogue = [];
-    state.catalogue.push(...springs);
-    saveStore(); renderCatalogue();
+    addLocal(springs);
     $('c-status').innerHTML = `<div class="callout warn"><p>Loaded ${springs.length} <strong>synthetic</strong>
       springs. They are geometrically consistent and fine for trying the tool, but they are
       <strong>not real parts</strong> &mdash; do not order from them.</p></div>`;
@@ -590,8 +687,7 @@ $('c-fileinput').addEventListener('change', async (e) => {
   if (file.name.endsWith('.json')) {
     try {
       const springs = cat.fromCatalogJson(text);
-      if ($('c-mode').value === 'replace') state.catalogue = [];
-      state.catalogue.push(...springs); saveStore(); renderCatalogue();
+      addLocal(springs);
       $('c-status').innerHTML = `<div class="callout"><p>Loaded ${springs.length} springs from ${esc(file.name)}.</p></div>`;
     } catch (err) {
       $('c-status').innerHTML = `<div class="callout bad"><p>${esc(file.name)} is not a catalogue file: ${esc(err.message)}</p></div>`;
@@ -638,13 +734,32 @@ async function downloadCatalogue() {
 $('c-download').addEventListener('click', downloadCatalogue);
 
 $('c-clear').addEventListener('click', () => {
-  state.catalogue = []; saveStore(); renderCatalogue();
-  $('c-status').innerHTML = '';
+  // Only this browser's springs are ours to clear; shipped rows come back.
+  state.local = [];
+  state.hidden = new Set();
+  saveStore(); rebuildCatalogue(); renderCatalogue();
+  $('c-status').innerHTML = `<div class="callout"><p>Cleared your additions. The
+    ${state.catalogue.length} spring${state.catalogue.length === 1 ? '' : 's'} shipped with the
+    site are still here.</p></div>`;
+});
+
+$('c-restore').addEventListener('click', () => {
+  state.hidden = new Set();
+  saveStore(); rebuildCatalogue(); renderCatalogue();
 });
 
 /* ------------------------------------------------------------------ boot */
 
 loadStore();
+rebuildCatalogue();
 renderCatalogue();
 runFind();
 runAnalyse();
+
+// The shipped catalogue arrives asynchronously; fold it in when it lands.
+loadShared().then(() => {
+  if (!state.shared.length) return;
+  rebuildCatalogue();
+  renderCatalogue();
+  runFind();
+});
