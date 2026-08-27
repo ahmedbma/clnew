@@ -413,3 +413,41 @@ test('end to end: 1.5 N inside a 0.5 in bore', () => {
     best.evaluation.working.sensitivity.rssFraction * 3);
   assert.ok(stiff.evaluation.working.sensitivity.worstCase_N > targetForce_N);
 });
+
+/* --------------------------------------- the fuller catalogue filter set */
+
+test('every published field can be filtered on', () => {
+  const base = { od_mm: 9, id_mm: 7, wireDia_mm: 1, freeLength_mm: 25, totalCoils: 20 };
+  const a = sm.normalizeSpring({ partNumber: 'A', ...base });
+  const b = sm.normalizeSpring({ partNumber: 'B', ...base, wireDia_mm: 0.7, id_mm: 7.6 });
+  const hot = sm.normalizeSpring({ partNumber: 'HOT', ...base, maxTemp_C: 400 });
+  const cold = sm.normalizeSpring({ partNumber: 'COLD', ...base, maxTemp_C: 80 });
+  const cone = sm.normalizeSpring({ partNumber: 'CONE', ...base, nonLinearShape: 'Conical' });
+  const open = sm.normalizeSpring({ partNumber: 'OPEN', ...base, endsKey: 'open' });
+
+  const ok = (list, req) => sm.searchCatalog(list, { targetForce_N: 1.5, ...req })
+    .filter((h) => h.ok).map((h) => h.spring.partNumber).sort();
+
+  assert.deepEqual(ok([a, b], { maxWireDia_mm: 0.8 }), ['B']);
+  assert.deepEqual(ok([a, b], { minWireDia_mm: 0.8 }), ['A']);
+  assert.deepEqual(ok([a, b], { maxID_mm: 7.2 }), ['A']);
+  assert.deepEqual(ok([a, b], { minID_mm: 7.4 }), ['B']);
+  assert.deepEqual(ok([a], { minOD_mm: 10 }), []);
+  assert.deepEqual(ok([a], { maxSolidLength_mm: 1 }), []);
+  assert.deepEqual(ok([a, b], { minRate_Npmm: a.rate_Npmm }), ['A']);
+  assert.deepEqual(ok([a, b], { maxRate_Npmm: b.rate_Npmm }), ['B']);
+  assert.deepEqual(ok([a], { minRatedLoad_N: a.maxUsableForce_N * 2 }), []);
+  assert.deepEqual(ok([a, open], { ends: ['open'] }), ['OPEN']);
+  assert.deepEqual(ok([a, cone], { straightOnly: true }), ['A']);
+
+  // Temperature: rated-too-low is excluded, but an unpublished rating is not
+  // a failure -- most catalogue tables never carry one.
+  assert.deepEqual(ok([hot, cold, a], { minTemperature_C: 200 }), ['A', 'HOT']);
+});
+
+test('a Fahrenheit rating converts on the way in', () => {
+  const s = sm.normalizeSpring({ od_mm: 9, wireDia_mm: 1, freeLength_mm: 25, totalCoils: 20, maxTemp_C: 454.4 });
+  close(s.maxTemp_F, 850, 1e-3);
+  close(cat.toCelsius('850° F'), 454.44, 1e-4);
+  close(cat.toCelsius('200 C'), 200);
+});

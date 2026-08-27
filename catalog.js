@@ -73,6 +73,13 @@ const RATE_TO_N_PER_MM = {
   'N/mm': 1, 'N/m': 0.001, 'lbf/in': lbfPerInToNPerMm(1), 'kgf/mm': 9.80665,
 };
 
+/** "850 deg F" / "450 C" -> degrees Celsius. */
+export function toCelsius(text) {
+  const v = parseNumber(text);
+  if (v == null) return null;
+  return /f\b|fahrenheit|℉/i.test(String(text)) ? (v - 32) * 5 / 9 : v;
+}
+
 /** value + unit -> mm.  `fallbackUnit` is used when the cell carries none. */
 export function toMm(text, fallbackUnit = 'in') {
   const v = parseNumber(text);
@@ -120,6 +127,7 @@ const COLUMN_PATTERNS = [
   ['rate', /spring\s*rate|^rate\b|load\s*rate|lbs?\.?\s*\/\s*in|n\s*\/\s*mm|stiffness/],
   ['totalCoils', /total\s*coils|^coils?$|number\s*of\s*coils/],
   ['activeCoils', /active\s*coils/],
+  ['maxTemperature', /max.*temp|temp.*rating|^temperature/],
   ['material', /material|\balloy\b|^made\s*of/],
   ['finish', /finish|plating|coating/],
   ['ends', /\bends?\b|end\s*type|end\s*style/],
@@ -255,6 +263,7 @@ export function rowsToSprings(rows, opts = {}) {
       rate_Npmm: toNewtonsPerMm(row.rate, ru),
       maxLoad_N: toNewtons(row.maxLoad, fu),
       totalCoils: parseNumber(row.totalCoils),
+      maxTemp_C: row.maxTemperature ? toCelsius(row.maxTemperature) : undefined,
       activeCoils: parseNumber(row.activeCoils),
       forRodDia_mm: toMm(row.forRodDia, lu),
       forHoleDia_mm: toMm(row.forHoleDia, lu),
@@ -541,9 +550,11 @@ export function specBlockToSpring(pairs, opts = {}) {
     read.push({ label: f.ends.label, value: f.ends.value, field: 'ends' });
   }
   if (f.maxTemperature) {
+    const c = toCelsius(f.maxTemperature.value);
+    if (c != null) raw.maxTemp_C = c;
     notes.push(`Max temperature ${f.maxTemperature.value}`);
-    read.push({ label: f.maxTemperature.label, value: f.maxTemperature.value, field: 'note',
-      note: 'kept as a note; it does not enter the calculation' });
+    read.push({ label: f.maxTemperature.label, value: f.maxTemperature.value, field: 'maxTemp_C',
+      note: c == null ? null : `${c.toFixed(0)} C — filterable` });
   }
 
   raw.vendor = opts.vendor || null;

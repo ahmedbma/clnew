@@ -72,6 +72,16 @@ details#f-more{margin-top:18px;border-top:1px solid var(--line);padding-top:12px
 details#f-more summary{font:600 12px/1.3 var(--cond);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 details#f-more[open] summary{margin-bottom:4px}
 
+/* grouped optional filters */
+h3.fgroup{display:flex;align-items:baseline;gap:8px;font:600 11px/1.3 var(--cond);
+  letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  margin:20px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+h3.fgroup:first-of-type{margin-top:14px}
+.u{font:400 11px/1.3 var(--mono);text-transform:none;letter-spacing:0;color:var(--muted)}
+.range{display:flex;align-items:center;gap:6px}
+.range input{flex:1;min-width:0}
+.range span{color:var(--muted);font-size:12px;flex:0 0 auto}
+
 /* natural-language box */
 .nl{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
 .nl-row{display:flex;gap:8px}
@@ -211,22 +221,77 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
 
     <details id="f-more">
       <summary>Narrow it down &mdash; all optional</summary>
-      <div class="grid" style="margin-top:14px">
-        <div><label for="f-maxod">Max outside diameter</label>
-          <input type="number" id="f-maxod" placeholder="any size" step="any"></div>
-        <div><label for="f-minid">Must clear a rod of</label>
-          <input type="number" id="f-minid" placeholder="no rod" step="any"></div>
-        <div><label for="f-maxfree">Max free length</label>
-          <input type="number" id="f-maxfree" placeholder="any length" step="any"></div>
+
+      <h3 class="fgroup">Size <span class="u" data-unit="length"></span></h3>
+      <div class="grid">
+        <div><label for="f-maxod">Outside diameter</label>
+          <div class="range">
+            <input type="number" id="f-minod" placeholder="min" step="any">
+            <span>to</span>
+            <input type="number" id="f-maxod" placeholder="max" step="any">
+          </div></div>
+        <div><label for="f-minid">Inside diameter</label>
+          <div class="range">
+            <input type="number" id="f-minid" placeholder="min" step="any">
+            <span>to</span>
+            <input type="number" id="f-maxid" placeholder="max" step="any">
+          </div>
+          <div class="hint">A minimum is what clears a rod or guide pin.</div></div>
+        <div><label for="f-maxwire">Wire diameter</label>
+          <div class="range">
+            <input type="number" id="f-minwire" placeholder="min" step="any">
+            <span>to</span>
+            <input type="number" id="f-maxwire" placeholder="max" step="any">
+          </div></div>
+        <div><label for="f-maxfree">Free length</label>
+          <div class="range">
+            <input type="number" id="f-minfree" placeholder="min" step="any">
+            <span>to</span>
+            <input type="number" id="f-maxfree" placeholder="max" step="any">
+          </div></div>
         <div><label for="f-maxinst">Max installed length</label>
           <input type="number" id="f-maxinst" placeholder="any length" step="any"></div>
-        <div><label for="f-mintravel">Compress at least</label>
+        <div><label for="f-maxsolid">Max solid length</label>
+          <input type="number" id="f-maxsolid" placeholder="any length" step="any"></div>
+      </div>
+
+      <h3 class="fgroup">How it behaves</h3>
+      <div class="grid">
+        <div><label for="f-maxrate">Spring rate <span class="u" data-unit="rate"></span></label>
+          <div class="range">
+            <input type="number" id="f-minrate" placeholder="min" step="any">
+            <span>to</span>
+            <input type="number" id="f-maxrate" placeholder="max" step="any">
+          </div></div>
+        <div><label for="f-minload">Rated for at least <span class="u" data-unit="force"></span></label>
+          <input type="number" id="f-minload" placeholder="any rating" step="any"></div>
+        <div><label for="f-mintravel">Compress at least <span class="u" data-unit="length"></span></label>
           <input type="number" id="f-mintravel" placeholder="any travel" step="any"></div>
-        <div><label for="f-material">Material</label>
-          <select id="f-material"><option value="">any</option></select></div>
         <div><label for="f-maxtravel">Max share of usable travel</label>
           <input type="number" id="f-maxtravel" placeholder="100%" step="any"></div>
-        <div><label for="f-postol">Position tolerance at assembly &plusmn;</label>
+      </div>
+
+      <h3 class="fgroup">Construction</h3>
+      <div class="grid">
+        <div><label for="f-material">Material</label>
+          <select id="f-material"><option value="">any</option></select></div>
+        <div><label for="f-ends">End type</label>
+          <select id="f-ends"><option value="">any</option></select></div>
+        <div><label for="f-shape">Coil shape</label>
+          <select id="f-shape">
+            <option value="">any</option>
+            <option value="straight">straight cylindrical only</option>
+          </select>
+          <div class="hint">Conical and barrel springs do not have a constant rate.</div></div>
+        <div><label for="f-mintemp">Rated to at least</label>
+          <div class="combo"><input type="number" id="f-mintemp" placeholder="any temperature" step="any">
+            <select id="f-temp-u"><option value="C">&deg;C</option><option value="F">&deg;F</option></select></div>
+          <div class="hint">Springs with no published rating are kept, not excluded.</div></div>
+      </div>
+
+      <h3 class="fgroup">Assumptions and ranking</h3>
+      <div class="grid">
+        <div><label for="f-postol">Position tolerance at assembly &plusmn; <span class="u" data-unit="length"></span></label>
           <input type="number" id="f-postol" placeholder="assumes 0.010 in" step="any"></div>
         <div><label for="f-ratetol">Spring rate tolerance &plusmn;%</label>
           <input type="number" id="f-ratetol" placeholder="assumes 10%" step="any"></div>
@@ -242,6 +307,7 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
       <div class="row">
         <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:13px;text-transform:none;font-weight:400;letter-spacing:0">
           <input type="checkbox" id="f-showall" style="width:auto"> show springs that do not fit, and why</label>
+        <button class="alt" id="f-reset">Clear all filters</button>
       </div>
     </details>
   </div>

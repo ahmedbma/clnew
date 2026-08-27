@@ -79,8 +79,10 @@ test('materials and ranking intent', () => {
 });
 
 test('a minimum on a max-only field is refused, not silently reversed', () => {
-  const r = parseQuery('1.5N at least 5mm OD');
-  assert.equal(r.fields.maxOD_mm, undefined);
+  // Installed length is only ever an upper bound.
+  const r = parseQuery('1.5N, installed length at least 5mm');
+  assert.equal(r.fields.maxInstalledLength_mm, undefined);
+  assert.equal(r.fields.minInstalledLength_mm, undefined);
   assert.match(r.unparsed[0].why, /only filtered as a maximum/);
   // Travel is the one dimension where a minimum is the natural reading.
   close(f('1.5N at least 3mm of travel').minDeflection_mm, 3);
@@ -116,4 +118,51 @@ test('a parsed phrase actually drives a search', () => {
     materials: q.fields.materialKey ? [q.fields.materialKey] : null,
   }).filter((h) => h.ok).map((h) => h.spring.partNumber);
   assert.deepEqual(hits, ['FITS']);
+});
+
+/* ------------------------------------ the fuller McMaster field surface */
+
+test('inside diameter reads in both directions', () => {
+  close(f('1.5N, ID at least 4mm').minID_mm, 4);
+  close(f('1.5N with ID under 6mm').maxID_mm, 6);
+  // A rod is a minimum by its nature, with no min/max word needed.
+  close(f('1.5N over a 3mm rod').minID_mm, 3);
+});
+
+test('wire diameter, solid length and free-length minimums', () => {
+  close(f('1.5N, 0.03 inch wire or thinner').maxWireDia_mm, sm.inToMm(0.03));
+  close(f('1.5N, wire at least 0.5mm').minWireDia_mm, 0.5);
+  close(f('1.5N, solid length under 10mm').maxSolidLength_mm, 10);
+  close(f('1.5N, free length at least 20mm').minFreeLength_mm, 20);
+  close(f('1.5N, at least 5mm OD').minOD_mm, 5);
+});
+
+test('spring rate, with its compound unit and its direction', () => {
+  close(f('1.5N, rate under 2 lbf/in').maxRate_Npmm, sm.lbfPerInToNPerMm(2));
+  close(f('1.5N, spring rate at least 0.5 N/mm').minRate_Npmm, 0.5);
+  // A rate must not leave its unit behind to be re-read as a second force.
+  const r = parseQuery('1.5N, rate under 2 lbf/in');
+  close(r.fields.force_N, 1.5);
+  assert.equal(r.unparsed.length, 0);
+});
+
+test('end type is read only when the words are about spring ends', () => {
+  assert.equal(f('1.5N, closed and ground ends').endsKey, 'closed-and-ground');
+  assert.equal(f('1.5N, squared ends').endsKey, 'closed');
+  assert.equal(f('1.5N, open ends').endsKey, 'open');
+  // "open" on its own is an ordinary English word, not an end treatment.
+  assert.equal(f("1.5N, I'm open to anything").endsKey, undefined);
+});
+
+test('a long phrase fills many filters at once without collisions', () => {
+  const r = f('1.5N in a 12mm bore, over a 3mm rod, wire at least 0.5mm, '
+    + 'free length under 25mm, rate under 2 N/mm, closed and ground ends, stainless');
+  close(r.force_N, 1.5);
+  close(r.maxOD_mm, 12);
+  close(r.minID_mm, 3);
+  close(r.minWireDia_mm, 0.5);
+  close(r.maxFreeLength_mm, 25);
+  close(r.maxRate_Npmm, 2);
+  assert.equal(r.endsKey, 'closed-and-ground');
+  assert.equal(r.materialKey, 'stainless-302');
 });

@@ -65,6 +65,16 @@ const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': 
 const rawNum = (id) => { const v = $(id).value.trim(); return v === '' ? null : Number(v); };
 /** Read a length input in the active display unit, as mm. */
 const readLen = (id) => { const v = rawNum(id); return v == null ? null : (state.lengthUnit === 'in' ? sm.inToMm(v) : v); };
+const readRate = (id) => {
+  const v = rawNum(id);
+  if (v == null) return null;
+  return state.lengthUnit === 'in' ? sm.lbfPerInToNPerMm(v) : v;
+};
+const readTemp = (id, unitId) => {
+  const v = rawNum(id);
+  if (v == null) return null;
+  return $(unitId).value === 'F' ? (v - 32) * 5 / 9 : v;
+};
 const readForce = (id, unitId) => {
   const v = rawNum(id);
   if (v == null) return null;
@@ -165,6 +175,17 @@ function fillSelect(sel, opts, { blank = null } = {}) {
 fillSelect($('f-material'), cat.MATERIAL_OPTIONS, { blank: 'any' });
 fillSelect($('a-material'), cat.MATERIAL_OPTIONS);
 fillSelect($('a-ends'), cat.END_OPTIONS);
+fillSelect($('f-ends'), cat.END_OPTIONS, { blank: 'any' });
+
+/** Labels carry the unit the box is read in, so no field is ambiguous. */
+function refreshUnitLabels() {
+  const len = state.lengthUnit === 'in' ? 'in' : 'mm';
+  const rate = state.lengthUnit === 'in' ? 'lbf/in' : 'N/mm';
+  const force = $('f-force-u').value;
+  document.querySelectorAll('[data-unit]').forEach((el) => {
+    el.textContent = { length: len, rate, force }[el.dataset.unit] || '';
+  });
+}
 fillSelect($('a-endcond'), Object.entries(sm.END_CONDITIONS).map(([key, v]) => ({ key, name: v.name })));
 
 /* --------------------------------------------------------- shared report */
@@ -387,10 +408,22 @@ function mountViz(container, s, ev) {
 function findRequirements() {
   return {
     targetForce_N: readForce('f-force', 'f-force-u'),
+    minOD_mm: readLen('f-minod'),
     maxOD_mm: readLen('f-maxod'),
     minID_mm: readLen('f-minid'),
+    maxID_mm: readLen('f-maxid'),
+    minWireDia_mm: readLen('f-minwire'),
+    maxWireDia_mm: readLen('f-maxwire'),
+    minFreeLength_mm: readLen('f-minfree'),
     maxFreeLength_mm: readLen('f-maxfree'),
     maxInstalledLength_mm: readLen('f-maxinst'),
+    maxSolidLength_mm: readLen('f-maxsolid'),
+    minRate_Npmm: readRate('f-minrate'),
+    maxRate_Npmm: readRate('f-maxrate'),
+    minRatedLoad_N: readForce('f-minload', 'f-force-u'),
+    minTemperature_C: readTemp('f-mintemp', 'f-temp-u'),
+    straightOnly: $('f-shape').value === 'straight',
+    ends: $('f-ends').value ? [$('f-ends').value] : null,
     positionTol_mm: readLen('f-postol') ?? sm.inToMm(0.010),
     rateTol: (rawNum('f-ratetol') ?? 10) / 100,
     minDeflection_mm: readLen('f-mintravel'),
@@ -525,6 +558,7 @@ function renderEquivalents() {
 }
 
 function runFind() {
+  refreshUnitLabels();
   const req = findRequirements();
   renderEquivalents();
   if (!req.targetForce_N) {
@@ -542,28 +576,74 @@ function runFind() {
  * The phrase drives the same form the fields do, so what it did is visible
  * and adjustable rather than hidden behind a black box.
  */
+/** Optional controls, so one place knows how to clear them all. */
+const OPTIONAL_NUMBERS = ['f-minod', 'f-maxod', 'f-minid', 'f-maxid', 'f-minwire', 'f-maxwire',
+  'f-minfree', 'f-maxfree', 'f-maxinst', 'f-maxsolid', 'f-minrate', 'f-maxrate', 'f-minload',
+  'f-mintravel', 'f-maxtravel', 'f-mintemp', 'f-postol', 'f-ratetol'];
+const OPTIONAL_SELECTS = { 'f-material': '', 'f-ends': '', 'f-shape': '', 'f-sort': 'robustness' };
+
+/**
+ * Inputs whose meaning depends on the length unit. With one diameter box the
+ * old behaviour -- reinterpret on toggle -- was survivable; across twenty
+ * boxes it silently changes every constraint, so values are converted.
+ */
+const LENGTH_INPUTS = ['f-minod', 'f-maxod', 'f-minid', 'f-maxid', 'f-minwire', 'f-maxwire',
+  'f-minfree', 'f-maxfree', 'f-maxinst', 'f-maxsolid', 'f-mintravel', 'f-postol',
+  'a-od', 'a-id', 'a-wire', 'a-free', 'a-maxdefl', 'a-at', 'a-postol'];
+const RATE_INPUTS = ['f-minrate', 'f-maxrate', 'a-rate'];
+const ANALYSE_FORCE_INPUTS = ['a-maxload'];
+
+/** Switch display units, carrying every typed value across with them. */
+function setLengthUnit(next) {
+  if (!next || next === state.lengthUnit) return;
+  const toIn = next === 'in';
+  const move = (ids, convert) => ids.forEach((id) => {
+    const el = $(id);
+    if (!el || el.value.trim() === '') return;
+    const v = Number(el.value);
+    if (!Number.isFinite(v)) return;
+    el.value = String(+convert(v).toFixed(6));
+  });
+  move(LENGTH_INPUTS, (v) => (toIn ? sm.mmToIn(v) : sm.inToMm(v)));
+  move(RATE_INPUTS, (v) => (toIn ? sm.nPerMmToLbfPerIn(v) : sm.lbfPerInToNPerMm(v)));
+  move(ANALYSE_FORCE_INPUTS, (v) => (toIn ? sm.nToLbf(v) : sm.lbfToN(v)));
+  state.lengthUnit = next;
+  $('f-len-u').value = next;
+  $('a-units').value = next;
+  refreshUnitLabels();
+}
+
+function clearFilters() {
+  OPTIONAL_NUMBERS.forEach((id) => { $(id).value = ''; });
+  Object.entries(OPTIONAL_SELECTS).forEach(([id, v]) => { $(id).value = v; });
+}
+
+/** Parsed field -> the form control it fills. */
 const NL_FIELDS = {
-  maxOD_mm: 'f-maxod', minID_mm: 'f-minid', maxFreeLength_mm: 'f-maxfree',
-  maxInstalledLength_mm: 'f-maxinst', minDeflection_mm: 'f-mintravel',
+  minOD_mm: 'f-minod', maxOD_mm: 'f-maxod',
+  minID_mm: 'f-minid', maxID_mm: 'f-maxid',
+  minWireDia_mm: 'f-minwire', maxWireDia_mm: 'f-maxwire',
+  minFreeLength_mm: 'f-minfree', maxFreeLength_mm: 'f-maxfree',
+  maxInstalledLength_mm: 'f-maxinst', maxSolidLength_mm: 'f-maxsolid',
+  minDeflection_mm: 'f-mintravel',
 };
 const NL_LABELS = {
   force: 'force', maxOD: 'max OD', minID: 'clears a rod of', maxFreeLength: 'max free length',
-  maxInstalledLength: 'max installed length', minDeflection: 'compress at least',
-  material: 'material', sortBy: 'rank by',
+  maxInstalledLength: 'max installed length', maxSolidLength: 'max solid length',
+  minDeflection: 'compress at least', maxID: 'max ID', minOD: 'min OD',
+  minWireDia: 'min wire', maxWireDia: 'max wire',
+  minRate: 'min rate', maxRate: 'max rate',
+  material: 'material', ends: 'end type', sortBy: 'rank by',
 };
 
 function applyParse(res) {
   // A new phrase replaces the old one; stale filters left behind would
   // silently narrow a search the words never asked to narrow.
-  Object.values(NL_FIELDS).forEach((id) => { $(id).value = ''; });
-  $('f-material').value = '';
-  $('f-sort').value = 'robustness';
+  clearFilters();
 
-  if (res.lengthUnit && res.lengthUnit !== state.lengthUnit) {
-    state.lengthUnit = res.lengthUnit;
-    $('f-len-u').value = res.lengthUnit;
-    $('a-units').value = res.lengthUnit;
-  }
+  // Filters were just cleared, so nothing of the phrase's is converted; this
+  // only carries the Analyse tab's numbers across.
+  setLengthUnit(res.lengthUnit);
   const f = res.fields;
   const disp = (mm) => (state.lengthUnit === 'in' ? sm.mmToIn(mm) : mm);
   if (f.force_N != null) {
@@ -573,7 +653,10 @@ function applyParse(res) {
   for (const [key, id] of Object.entries(NL_FIELDS)) {
     if (f[key] != null) $(id).value = String(+disp(f[key]).toFixed(4));
   }
+  if (f.minRate_Npmm != null) $('f-minrate').value = String(+(state.lengthUnit === 'in' ? sm.nPerMmToLbfPerIn(f.minRate_Npmm) : f.minRate_Npmm).toFixed(4));
+  if (f.maxRate_Npmm != null) $('f-maxrate').value = String(+(state.lengthUnit === 'in' ? sm.nPerMmToLbfPerIn(f.maxRate_Npmm) : f.maxRate_Npmm).toFixed(4));
   if (f.materialKey) $('f-material').value = f.materialKey;
+  if (f.endsKey) $('f-ends').value = f.endsKey;
   if (f.sortBy) $('f-sort').value = f.sortBy;
   // Show the filters it set, so nothing is applied out of sight.
   if (Object.keys(f).some((k) => k !== 'force_N' && k !== 'forceUnit' && k !== 'forceValue')) {
@@ -611,16 +694,13 @@ function runNaturalLanguage() {
 $('f-nl-run').addEventListener('click', runNaturalLanguage);
 $('f-nl').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); runNaturalLanguage(); } });
 
+$('f-reset').addEventListener('click', () => { clearFilters(); $('f-nl').value = ''; $('f-nl-out').innerHTML = ''; runFind(); });
 $('f-run').addEventListener('click', runFind);
-$('f-len-u').addEventListener('change', () => {
-  state.lengthUnit = $('f-len-u').value;
-  $('a-units').value = state.lengthUnit;
-  runFind();
-});
+$('f-len-u').addEventListener('change', () => { setLengthUnit($('f-len-u').value); runFind(); runAnalyse(); });
 document.querySelectorAll('#tab-find input, #tab-find select').forEach((x) =>
   x.addEventListener('keydown', (e) => { if (e.key === 'Enter') runFind(); }));
 $('f-force').addEventListener('input', renderEquivalents);
-$('f-force-u').addEventListener('change', renderEquivalents);
+$('f-force-u').addEventListener('change', () => { renderEquivalents(); refreshUnitLabels(); });
 
 /* ---------------------------------------------------------- ANALYSE tab */
 
@@ -675,11 +755,7 @@ function runAnalyse() {
   }
 }
 $('a-run').addEventListener('click', runAnalyse);
-$('a-units').addEventListener('change', () => {
-  state.lengthUnit = $('a-units').value;
-  $('f-len-u').value = state.lengthUnit;
-  runAnalyse();
-});
+$('a-units').addEventListener('change', () => { setLengthUnit($('a-units').value); runAnalyse(); runFind(); });
 $('a-save').addEventListener('click', () => {
   const s = analyseSpring();
   if (s.incomplete) { runAnalyse(); return; }

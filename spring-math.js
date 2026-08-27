@@ -466,6 +466,7 @@ export function normalizeSpring(raw) {
     if (L0 != null) s.minWorkingLength_mm = L0 - s.usableTravel_mm;
   }
   if (s.travelToSolid_mm != null) s.forceAtSolid_N = k * s.travelToSolid_mm;
+  if (num(s.maxTemp_C) != null) s.maxTemp_F = s.maxTemp_C * 9 / 5 + 32;
 
   return { ...s, derived, warnings, incomplete: false };
 }
@@ -617,10 +618,16 @@ export function evaluate(springIn, opts = {}) {
 export function searchCatalog(springs, req = {}) {
   const {
     targetForce_N,
-    maxOD_mm = null, minOD_mm = null, minID_mm = null,
+    maxOD_mm = null, minOD_mm = null,
+    minID_mm = null, maxID_mm = null,
+    minWireDia_mm = null, maxWireDia_mm = null,
     maxFreeLength_mm = null, minFreeLength_mm = null,
     maxInstalledLength_mm = null, maxSolidLength_mm = null,
-    materials = null,
+    minRate_Npmm = null, maxRate_Npmm = null,
+    minRatedLoad_N = null,
+    minTemperature_C = null,
+    straightOnly = false,
+    materials = null, ends = null,
     minTravelHeadroom_mm = 0,
     minDeflection_mm = null,
     maxTravelUsedFraction = 1,
@@ -638,10 +645,25 @@ export function searchCatalog(springs, req = {}) {
     if (maxOD_mm != null && s.od_mm != null && s.od_mm > maxOD_mm + 1e-9) rejected.push(`OD ${s.od_mm.toFixed(2)} mm exceeds ${maxOD_mm.toFixed(2)} mm.`);
     if (minOD_mm != null && s.od_mm != null && s.od_mm < minOD_mm) rejected.push(`OD below minimum.`);
     if (minID_mm != null && s.id_mm != null && s.id_mm < minID_mm) rejected.push(`ID ${s.id_mm.toFixed(2)} mm will not clear a ${minID_mm.toFixed(2)} mm rod.`);
+    if (maxID_mm != null && s.id_mm != null && s.id_mm > maxID_mm) rejected.push(`ID ${s.id_mm.toFixed(2)} mm exceeds ${maxID_mm.toFixed(2)} mm.`);
+    if (minWireDia_mm != null && s.wireDia_mm != null && s.wireDia_mm < minWireDia_mm) rejected.push('Wire is thinner than asked for.');
+    if (maxWireDia_mm != null && s.wireDia_mm != null && s.wireDia_mm > maxWireDia_mm) rejected.push('Wire is thicker than asked for.');
     if (maxFreeLength_mm != null && s.freeLength_mm != null && s.freeLength_mm > maxFreeLength_mm) rejected.push('Free length too long.');
     if (minFreeLength_mm != null && s.freeLength_mm != null && s.freeLength_mm < minFreeLength_mm) rejected.push('Free length too short.');
     if (maxSolidLength_mm != null && s.solidLength_mm != null && s.solidLength_mm > maxSolidLength_mm) rejected.push('Solid length too long.');
+    if (minRate_Npmm != null && s.rate_Npmm != null && s.rate_Npmm < minRate_Npmm) rejected.push('Softer than the rate asked for.');
+    if (maxRate_Npmm != null && s.rate_Npmm != null && s.rate_Npmm > maxRate_Npmm) rejected.push('Stiffer than the rate asked for.');
+    if (minRatedLoad_N != null && s.maxUsableForce_N != null && s.maxUsableForce_N < minRatedLoad_N) {
+      rejected.push(`Rated to ${s.maxUsableForce_N.toFixed(2)} N, below the ${minRatedLoad_N.toFixed(2)} N asked for.`);
+    }
+    // An unknown rating is not a failed one -- most catalogue tables never
+    // publish a temperature, and excluding those would hide good springs.
+    if (minTemperature_C != null && s.maxTemp_C != null && s.maxTemp_C < minTemperature_C) {
+      rejected.push(`Rated to ${s.maxTemp_C.toFixed(0)} C, below the ${minTemperature_C.toFixed(0)} C asked for.`);
+    }
+    if (straightOnly && s.nonLinearShape) rejected.push(`Listed as ${s.nonLinearShape}, not a straight cylindrical spring.`);
     if (materials && materials.length && !materials.includes(s.materialKey)) rejected.push('Material excluded.');
+    if (ends && ends.length && !ends.includes(s.endsKey)) rejected.push('End type excluded.');
 
     const ev = evaluate(s, { targetForce_N, ...evalOpts });
     if (!ev.feasible) rejected.push(...ev.reasons);

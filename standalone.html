@@ -72,6 +72,16 @@ details#f-more{margin-top:18px;border-top:1px solid var(--line);padding-top:12px
 details#f-more summary{font:600 12px/1.3 var(--cond);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 details#f-more[open] summary{margin-bottom:4px}
 
+/* grouped optional filters */
+h3.fgroup{display:flex;align-items:baseline;gap:8px;font:600 11px/1.3 var(--cond);
+  letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  margin:20px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+h3.fgroup:first-of-type{margin-top:14px}
+.u{font:400 11px/1.3 var(--mono);text-transform:none;letter-spacing:0;color:var(--muted)}
+.range{display:flex;align-items:center;gap:6px}
+.range input{flex:1;min-width:0}
+.range span{color:var(--muted);font-size:12px;flex:0 0 auto}
+
 /* natural-language box */
 .nl{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
 .nl-row{display:flex;gap:8px}
@@ -211,22 +221,77 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
 
     <details id="f-more">
       <summary>Narrow it down &mdash; all optional</summary>
-      <div class="grid" style="margin-top:14px">
-        <div><label for="f-maxod">Max outside diameter</label>
-          <input type="number" id="f-maxod" placeholder="any size" step="any"></div>
-        <div><label for="f-minid">Must clear a rod of</label>
-          <input type="number" id="f-minid" placeholder="no rod" step="any"></div>
-        <div><label for="f-maxfree">Max free length</label>
-          <input type="number" id="f-maxfree" placeholder="any length" step="any"></div>
+
+      <h3 class="fgroup">Size <span class="u" data-unit="length"></span></h3>
+      <div class="grid">
+        <div><label for="f-maxod">Outside diameter</label>
+          <div class="range">
+            <input type="number" id="f-minod" placeholder="min" step="any">
+            <span>to</span>
+            <input type="number" id="f-maxod" placeholder="max" step="any">
+          </div></div>
+        <div><label for="f-minid">Inside diameter</label>
+          <div class="range">
+            <input type="number" id="f-minid" placeholder="min" step="any">
+            <span>to</span>
+            <input type="number" id="f-maxid" placeholder="max" step="any">
+          </div>
+          <div class="hint">A minimum is what clears a rod or guide pin.</div></div>
+        <div><label for="f-maxwire">Wire diameter</label>
+          <div class="range">
+            <input type="number" id="f-minwire" placeholder="min" step="any">
+            <span>to</span>
+            <input type="number" id="f-maxwire" placeholder="max" step="any">
+          </div></div>
+        <div><label for="f-maxfree">Free length</label>
+          <div class="range">
+            <input type="number" id="f-minfree" placeholder="min" step="any">
+            <span>to</span>
+            <input type="number" id="f-maxfree" placeholder="max" step="any">
+          </div></div>
         <div><label for="f-maxinst">Max installed length</label>
           <input type="number" id="f-maxinst" placeholder="any length" step="any"></div>
-        <div><label for="f-mintravel">Compress at least</label>
+        <div><label for="f-maxsolid">Max solid length</label>
+          <input type="number" id="f-maxsolid" placeholder="any length" step="any"></div>
+      </div>
+
+      <h3 class="fgroup">How it behaves</h3>
+      <div class="grid">
+        <div><label for="f-maxrate">Spring rate <span class="u" data-unit="rate"></span></label>
+          <div class="range">
+            <input type="number" id="f-minrate" placeholder="min" step="any">
+            <span>to</span>
+            <input type="number" id="f-maxrate" placeholder="max" step="any">
+          </div></div>
+        <div><label for="f-minload">Rated for at least <span class="u" data-unit="force"></span></label>
+          <input type="number" id="f-minload" placeholder="any rating" step="any"></div>
+        <div><label for="f-mintravel">Compress at least <span class="u" data-unit="length"></span></label>
           <input type="number" id="f-mintravel" placeholder="any travel" step="any"></div>
-        <div><label for="f-material">Material</label>
-          <select id="f-material"><option value="">any</option></select></div>
         <div><label for="f-maxtravel">Max share of usable travel</label>
           <input type="number" id="f-maxtravel" placeholder="100%" step="any"></div>
-        <div><label for="f-postol">Position tolerance at assembly &plusmn;</label>
+      </div>
+
+      <h3 class="fgroup">Construction</h3>
+      <div class="grid">
+        <div><label for="f-material">Material</label>
+          <select id="f-material"><option value="">any</option></select></div>
+        <div><label for="f-ends">End type</label>
+          <select id="f-ends"><option value="">any</option></select></div>
+        <div><label for="f-shape">Coil shape</label>
+          <select id="f-shape">
+            <option value="">any</option>
+            <option value="straight">straight cylindrical only</option>
+          </select>
+          <div class="hint">Conical and barrel springs do not have a constant rate.</div></div>
+        <div><label for="f-mintemp">Rated to at least</label>
+          <div class="combo"><input type="number" id="f-mintemp" placeholder="any temperature" step="any">
+            <select id="f-temp-u"><option value="C">&deg;C</option><option value="F">&deg;F</option></select></div>
+          <div class="hint">Springs with no published rating are kept, not excluded.</div></div>
+      </div>
+
+      <h3 class="fgroup">Assumptions and ranking</h3>
+      <div class="grid">
+        <div><label for="f-postol">Position tolerance at assembly &plusmn; <span class="u" data-unit="length"></span></label>
           <input type="number" id="f-postol" placeholder="assumes 0.010 in" step="any"></div>
         <div><label for="f-ratetol">Spring rate tolerance &plusmn;%</label>
           <input type="number" id="f-ratetol" placeholder="assumes 10%" step="any"></div>
@@ -242,6 +307,7 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
       <div class="row">
         <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:13px;text-transform:none;font-weight:400;letter-spacing:0">
           <input type="checkbox" id="f-showall" style="width:auto"> show springs that do not fit, and why</label>
+        <button class="alt" id="f-reset">Clear all filters</button>
       </div>
     </details>
   </div>
@@ -880,6 +946,7 @@ function normalizeSpring(raw) {
     if (L0 != null) s.minWorkingLength_mm = L0 - s.usableTravel_mm;
   }
   if (s.travelToSolid_mm != null) s.forceAtSolid_N = k * s.travelToSolid_mm;
+  if (num(s.maxTemp_C) != null) s.maxTemp_F = s.maxTemp_C * 9 / 5 + 32;
 
   return { ...s, derived, warnings, incomplete: false };
 }
@@ -1031,10 +1098,16 @@ function evaluate(springIn, opts = {}) {
 function searchCatalog(springs, req = {}) {
   const {
     targetForce_N,
-    maxOD_mm = null, minOD_mm = null, minID_mm = null,
+    maxOD_mm = null, minOD_mm = null,
+    minID_mm = null, maxID_mm = null,
+    minWireDia_mm = null, maxWireDia_mm = null,
     maxFreeLength_mm = null, minFreeLength_mm = null,
     maxInstalledLength_mm = null, maxSolidLength_mm = null,
-    materials = null,
+    minRate_Npmm = null, maxRate_Npmm = null,
+    minRatedLoad_N = null,
+    minTemperature_C = null,
+    straightOnly = false,
+    materials = null, ends = null,
     minTravelHeadroom_mm = 0,
     minDeflection_mm = null,
     maxTravelUsedFraction = 1,
@@ -1052,10 +1125,25 @@ function searchCatalog(springs, req = {}) {
     if (maxOD_mm != null && s.od_mm != null && s.od_mm > maxOD_mm + 1e-9) rejected.push(`OD ${s.od_mm.toFixed(2)} mm exceeds ${maxOD_mm.toFixed(2)} mm.`);
     if (minOD_mm != null && s.od_mm != null && s.od_mm < minOD_mm) rejected.push(`OD below minimum.`);
     if (minID_mm != null && s.id_mm != null && s.id_mm < minID_mm) rejected.push(`ID ${s.id_mm.toFixed(2)} mm will not clear a ${minID_mm.toFixed(2)} mm rod.`);
+    if (maxID_mm != null && s.id_mm != null && s.id_mm > maxID_mm) rejected.push(`ID ${s.id_mm.toFixed(2)} mm exceeds ${maxID_mm.toFixed(2)} mm.`);
+    if (minWireDia_mm != null && s.wireDia_mm != null && s.wireDia_mm < minWireDia_mm) rejected.push('Wire is thinner than asked for.');
+    if (maxWireDia_mm != null && s.wireDia_mm != null && s.wireDia_mm > maxWireDia_mm) rejected.push('Wire is thicker than asked for.');
     if (maxFreeLength_mm != null && s.freeLength_mm != null && s.freeLength_mm > maxFreeLength_mm) rejected.push('Free length too long.');
     if (minFreeLength_mm != null && s.freeLength_mm != null && s.freeLength_mm < minFreeLength_mm) rejected.push('Free length too short.');
     if (maxSolidLength_mm != null && s.solidLength_mm != null && s.solidLength_mm > maxSolidLength_mm) rejected.push('Solid length too long.');
+    if (minRate_Npmm != null && s.rate_Npmm != null && s.rate_Npmm < minRate_Npmm) rejected.push('Softer than the rate asked for.');
+    if (maxRate_Npmm != null && s.rate_Npmm != null && s.rate_Npmm > maxRate_Npmm) rejected.push('Stiffer than the rate asked for.');
+    if (minRatedLoad_N != null && s.maxUsableForce_N != null && s.maxUsableForce_N < minRatedLoad_N) {
+      rejected.push(`Rated to ${s.maxUsableForce_N.toFixed(2)} N, below the ${minRatedLoad_N.toFixed(2)} N asked for.`);
+    }
+    // An unknown rating is not a failed one -- most catalogue tables never
+    // publish a temperature, and excluding those would hide good springs.
+    if (minTemperature_C != null && s.maxTemp_C != null && s.maxTemp_C < minTemperature_C) {
+      rejected.push(`Rated to ${s.maxTemp_C.toFixed(0)} C, below the ${minTemperature_C.toFixed(0)} C asked for.`);
+    }
+    if (straightOnly && s.nonLinearShape) rejected.push(`Listed as ${s.nonLinearShape}, not a straight cylindrical spring.`);
     if (materials && materials.length && !materials.includes(s.materialKey)) rejected.push('Material excluded.');
+    if (ends && ends.length && !ends.includes(s.endsKey)) rejected.push('End type excluded.');
 
     const ev = evaluate(s, { targetForce_N, ...evalOpts });
     if (!ev.feasible) rejected.push(...ev.reasons);
@@ -1266,6 +1354,13 @@ const RATE_TO_N_PER_MM = {
   'N/mm': 1, 'N/m': 0.001, 'lbf/in': lbfPerInToNPerMm(1), 'kgf/mm': 9.80665,
 };
 
+/** "850 deg F" / "450 C" -> degrees Celsius. */
+function toCelsius(text) {
+  const v = parseNumber(text);
+  if (v == null) return null;
+  return /f\b|fahrenheit|℉/i.test(String(text)) ? (v - 32) * 5 / 9 : v;
+}
+
 /** value + unit -> mm.  `fallbackUnit` is used when the cell carries none. */
 function toMm(text, fallbackUnit = 'in') {
   const v = parseNumber(text);
@@ -1313,6 +1408,7 @@ const COLUMN_PATTERNS = [
   ['rate', /spring\s*rate|^rate\b|load\s*rate|lbs?\.?\s*\/\s*in|n\s*\/\s*mm|stiffness/],
   ['totalCoils', /total\s*coils|^coils?$|number\s*of\s*coils/],
   ['activeCoils', /active\s*coils/],
+  ['maxTemperature', /max.*temp|temp.*rating|^temperature/],
   ['material', /material|\balloy\b|^made\s*of/],
   ['finish', /finish|plating|coating/],
   ['ends', /\bends?\b|end\s*type|end\s*style/],
@@ -1448,6 +1544,7 @@ function rowsToSprings(rows, opts = {}) {
       rate_Npmm: toNewtonsPerMm(row.rate, ru),
       maxLoad_N: toNewtons(row.maxLoad, fu),
       totalCoils: parseNumber(row.totalCoils),
+      maxTemp_C: row.maxTemperature ? toCelsius(row.maxTemperature) : undefined,
       activeCoils: parseNumber(row.activeCoils),
       forRodDia_mm: toMm(row.forRodDia, lu),
       forHoleDia_mm: toMm(row.forHoleDia, lu),
@@ -1734,9 +1831,11 @@ function specBlockToSpring(pairs, opts = {}) {
     read.push({ label: f.ends.label, value: f.ends.value, field: 'ends' });
   }
   if (f.maxTemperature) {
+    const c = toCelsius(f.maxTemperature.value);
+    if (c != null) raw.maxTemp_C = c;
     notes.push(`Max temperature ${f.maxTemperature.value}`);
-    read.push({ label: f.maxTemperature.label, value: f.maxTemperature.value, field: 'note',
-      note: 'kept as a note; it does not enter the calculation' });
+    read.push({ label: f.maxTemperature.label, value: f.maxTemperature.value, field: 'maxTemp_C',
+      note: c == null ? null : `${c.toFixed(0)} C — filterable` });
   }
 
   raw.vendor = opts.vendor || null;
@@ -1782,13 +1881,13 @@ function importAny(text, opts = {}) {
   return { ...table, format: 'table' };
 }
 
-return { parseNumber, detectUnit, toMm, toNewtons, toNewtonsPerMm, mapHeader, parseTable, rowsToSprings, importTable, springFromForm, toCatalogJson, fromCatalogJson, MATERIAL_OPTIONS, END_OPTIONS, looksLikeSpecSheet, describeSpring, specBlockToSpring, importSpecSheets, importAny };
+return { parseNumber, detectUnit, toCelsius, toMm, toNewtons, toNewtonsPerMm, mapHeader, parseTable, rowsToSprings, importTable, springFromForm, toCatalogJson, fromCatalogJson, MATERIAL_OPTIONS, END_OPTIONS, looksLikeSpecSheet, describeSpring, specBlockToSpring, importSpecSheets, importAny };
 })();
 
 const nlq = (() => {
-const { inToMm, resolveMaterial, MATERIALS } = sm;
-const { inToMm, resolveMaterial, MATERIALS } from './spring-math.js';
-import { parseNumber, toMm, toNewtons } = cat;
+const { inToMm, resolveMaterial, resolveEnds, MATERIALS, END_TYPES } = sm;
+const { inToMm, resolveMaterial, resolveEnds, MATERIALS, END_TYPES } from './spring-math.js';
+import { parseNumber, toMm, toNewtons, toNewtonsPerMm } = cat;
 /**
  * nl-query.js -- turn a typed phrase into search parameters.
  *
@@ -1874,14 +1973,40 @@ const measurements = (text) => clauses(text).flatMap(measurementsIn);
 
 /* ------------------------------------------------------------ classifying */
 
-// Checked in order; the first cue that matches a measurement's surroundings wins.
-const LENGTH_CUES = [
-  ['minID', /\b(rod|shaft|pin|mandrel|spindle|post|bolt|screw|guide)\b|\bclear(s|ing)?\b|\bover a\b|\baround a\b|\bslip over\b|\bid\b|\binside dia|\binner dia/],
-  ['minDeflection', /\btravel|\bstroke|\bdeflect|\bcompress(es|ed|ion)? by\b|\bsqueeze|\bmovement|\bthrow\b/],
-  ['maxInstalledLength', /\binstalled|\bcompressed (length|lg)|\bworking length|\bat length|\bin place|\bwhen compressed/],
-  ['maxFreeLength', /\bfree length|\blong(er|est)?\b|\blength\b|\btall(er)?\b|\bheight\b|\bdeep(er)?\b/],
-  ['maxOD', /\bod\b|\bo\.d\.|\boutside|\bouter|\bdiameter|\bdia\b|\bbore\b|\bhole\b|\bwide\b|\bwidth\b|\bfits?\b|\binto?\b|\bwithin\b|\bacross\b/],
+/**
+ * Cues are matched in order, so the specific ones come first: a "rod" is an
+ * inside diameter before "diameter" can claim it, and "wire" before "dia".
+ * `directions` is what the search can actually filter on for that dimension,
+ * and `fallback` is the direction assumed when no min/max word is present.
+ */
+const DIMENSION_CUES = [
+  ['WireDia', /\bwire\b|\bgauge\b|\bgage\b/, ['min', 'max'], 'max'],
+  ['ID', /\b(rod|shaft|pin|mandrel|spindle|post|guide)\b|\bclear(s|ing)?\b|\bover a\b|\baround a\b|\bslip over\b|\bid\b|\binside dia|\binner dia/, ['min', 'max'], 'min'],
+  ['Deflection', /\btravel|\bstroke|\bdeflect|\bcompress(es|ed|ion)? by\b|\bsqueeze|\bmovement|\bthrow\b/, ['min'], 'min'],
+  ['SolidLength', /\bsolid\b|\bstacked\b|\bfully compressed\b|\bshut height\b/, ['max'], 'max'],
+  ['InstalledLength', /\binstalled|\bcompressed (length|lg)|\bworking length|\bat length|\bin place|\bwhen compressed/, ['max'], 'max'],
+  ['FreeLength', /\bfree length|\blong(er|est)?\b|\blength\b|\btall(er)?\b|\bheight\b|\bdeep(er)?\b/, ['min', 'max'], 'max'],
+  ['OD', /\bod\b|\bo\.d\.|\boutside|\bouter|\bdiameter|\bdia\b|\bbore\b|\bhole\b|\bwide\b|\bwidth\b|\bfits?\b|\binto?\b|\bwithin\b|\bacross\b/, ['min', 'max'], 'max'],
 ];
+const DIMENSION_FIELD = {
+  WireDia: 'WireDia_mm', ID: 'ID_mm', Deflection: 'Deflection_mm',
+  SolidLength: 'SolidLength_mm', InstalledLength: 'InstalledLength_mm',
+  FreeLength: 'FreeLength_mm', OD: 'OD_mm',
+};
+const DIMENSION_NAME = {
+  WireDia: 'wire diameter', ID: 'inside diameter', Deflection: 'travel',
+  SolidLength: 'solid length', InstalledLength: 'installed length',
+  FreeLength: 'free length', OD: 'outside diameter',
+};
+
+/**
+ * Spring rate carries a compound unit the plain number scanner cannot see.
+ * Unit-bearing forms are matched first so "rate under 2 lbf/in" is claimed
+ * whole -- otherwise the keyword form takes "rate under 2" and abandons the
+ * "lbf/in", which then reads as a second force.
+ */
+const RATE_UNIT_RE = /(?:(?:spring\s*)?(?:rate|stiffness)\D{0,16}?)?(\d*\.?\d+)\s*(lbf?\s*\/\s*in|lbs?\.?\s*\/\s*in\.?|n\s*\/\s*mm)/g;
+const RATE_WORD_RE = /(?:spring\s*)?(?:rate|stiffness)\D{0,16}?(\d*\.?\d+)/g;
 
 const MIN_CUE = /\b(at least|minimum|min\.?|no less than|more than|greater than|over)\b\s*$/;
 const MAX_CUE = /\b(at most|maximum|max\.?|no more than|under|less than|below|up to|no bigger than|no longer than|smaller than|within)\b\s*$/;
@@ -1906,7 +2031,44 @@ function parseQuery(input, { defaultForceUnit = 'N' } = {}) {
   const unparsed = [];
   if (!text) return { fields, read, unparsed, lengthUnit: null, empty: true };
 
-  const found = measurements(text);
+  // Rates first. Their spans are blanked out of the text the number scanner
+  // sees, so a rate's digits and unit are never re-read as a force or a size.
+  let scrubbed = text;
+  const takeRates = (re, unitRequired) => {
+    re.lastIndex = 0;
+    let r;
+    while ((r = re.exec(scrubbed)) !== null) {
+      const raw = r[0];
+      const value = parseNumber(r[1]);
+      const unit = (r[2] || '').replace(/\s+/g, '') || null;
+      if (value == null || (unitRequired && !unit)) continue;
+
+      // The direction word usually sits inside the match ("rate at least 2"),
+      // so look at everything up to the number, back to the clause boundary.
+      const numberAt = raw.lastIndexOf(String(r[1]));
+      const head = scrubbed.slice(0, r.index + numberAt);
+      const clauseHead = head.slice(Math.max(head.lastIndexOf(','), head.lastIndexOf(';')) + 1);
+      const dir = MIN_CUE.test(clauseHead) ? 'min' : 'max';
+
+      const npmm = unit
+        ? toNewtonsPerMm(`${value} ${unit}`, 'lbf/in')
+        : toNewtonsPerMm(`${value}`, /n\s*\/\s*mm|\bmm\b/.test(scrubbed) ? 'N/mm' : 'lbf/in');
+      if (npmm == null || !(npmm > 0)) continue;
+
+      const key = `${dir}Rate_Npmm`;
+      if (fields[key] == null) {
+        fields[key] = npmm;
+        read.push({ field: `${dir}Rate`, from: raw.trim(),
+          value: `${npmm.toFixed(4)} N/mm`, note: unit ? null : 'no unit given, read as a spring rate' });
+      }
+      scrubbed = scrubbed.slice(0, r.index) + ' '.repeat(raw.length) + scrubbed.slice(r.index + raw.length);
+      re.lastIndex = r.index + raw.length;
+    }
+  };
+  takeRates(RATE_UNIT_RE, true);
+  takeRates(RATE_WORD_RE, false);
+
+  const found = measurements(scrubbed);
 
   // Which unit system is the person speaking in? Decide from the lengths they
   // actually quoted -- the bare preposition "in" is not a unit, and a force
@@ -1947,35 +2109,35 @@ function parseQuery(input, { defaultForceUnit = 'N' } = {}) {
     }
   }
 
-  // --- lengths ---------------------------------------------------------
+  // --- dimensions ------------------------------------------------------
   for (const m of found) {
     if (m === forceTaken || m.kind === 'force') continue;
-    if (m.kind === 'bare' && !LENGTH_CUES.some(([, re]) => re.test(m.before) || re.test(m.after))) {
+    const context = `${m.before} ${m.after}`;
+    const hit = DIMENSION_CUES.find(([, re]) => re.test(context));
+    if (m.kind === 'bare' && !hit) {
       unparsed.push({ from: m.text, why: 'no unit and nothing nearby saying what it measures' });
       continue;
     }
-    const context = `${m.before} ${m.after}`;
-    const hit = LENGTH_CUES.find(([, re]) => re.test(context));
-    const field = hit ? hit[0] : 'maxOD';
+    const [dim, , directions, fallback] = hit || DIMENSION_CUES.find(([d]) => d === 'OD');
     const mm = toMm(m.unit ? m.text : `${m.value} ${fallbackLength}`, fallbackLength);
     if (mm == null || !(mm > 0)) { unparsed.push({ from: m.text, why: 'could not read that as a length' }); continue; }
 
-    // "at least 5mm OD" is a minimum on a field this only filters as a
-    // maximum -- say so rather than quietly reversing the meaning.
-    const wantsMin = MIN_CUE.test(m.before);
-    if (wantsMin && field !== 'minDeflection' && field !== 'minID') {
-      unparsed.push({ from: m.text, why: `read as a minimum, but ${field === 'maxOD' ? 'diameter' : 'length'} is only filtered as a maximum` });
+    // Direction comes from the words, and is refused rather than reversed
+    // when the search cannot filter that way round.
+    let dir = fallback;
+    if (MIN_CUE.test(m.before)) dir = 'min';
+    else if (MAX_CUE.test(m.before)) dir = 'max';
+    if (!directions.includes(dir)) {
+      unparsed.push({ from: m.text,
+        why: `read as a ${dir}imum, but ${DIMENSION_NAME[dim]} is only filtered as a ${directions[0]}imum` });
       continue;
     }
-    if (MAX_CUE.test(m.before) && field === 'minDeflection') {
-      unparsed.push({ from: m.text, why: 'travel is only filtered as a minimum' });
-      continue;
-    }
-    if (fields[`${field}_mm`] != null) { unparsed.push({ from: m.text, why: 'a second value for the same thing' }); continue; }
+    const field = `${dir}${DIMENSION_FIELD[dim]}`;
+    if (fields[field] != null) { unparsed.push({ from: m.text, why: 'a second value for the same thing' }); continue; }
 
-    fields[`${field}_mm`] = mm;
+    fields[field] = mm;
     const shown = fallbackLength === 'mm' ? `${mm.toFixed(2)} mm` : `${(mm / 25.4).toFixed(3)} in`;
-    note(field, m, shown, hit ? null : 'no cue nearby, taken as the outside diameter');
+    note(`${dir}${dim}`, m, shown, hit ? null : 'no cue nearby, taken as the outside diameter');
   }
 
   // --- material --------------------------------------------------------
@@ -1983,6 +2145,16 @@ function parseQuery(input, { defaultForceUnit = 'N' } = {}) {
   if (materialKey) {
     fields.materialKey = materialKey;
     read.push({ field: 'material', from: materialKey.replace(/-/g, ' '), value: MATERIALS[materialKey].name });
+  }
+
+  // --- end treatment ---------------------------------------------------
+  if (/\bends?\b|\bground\b|\bsquared\b/.test(text)) {
+    const phrase = text.match(/\b(closed|squared|open|plain)(\s*(?:and|&)\s*ground)?(\s+ends?)?\b/);
+    const endsKey = phrase ? resolveEnds(phrase[0]) : null;
+    if (endsKey) {
+      fields.endsKey = endsKey;
+      read.push({ field: 'ends', from: phrase[0].trim(), value: END_TYPES[endsKey].name });
+    }
   }
 
   // --- what to optimise for -------------------------------------------
@@ -2074,6 +2246,16 @@ const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': 
 const rawNum = (id) => { const v = $(id).value.trim(); return v === '' ? null : Number(v); };
 /** Read a length input in the active display unit, as mm. */
 const readLen = (id) => { const v = rawNum(id); return v == null ? null : (state.lengthUnit === 'in' ? sm.inToMm(v) : v); };
+const readRate = (id) => {
+  const v = rawNum(id);
+  if (v == null) return null;
+  return state.lengthUnit === 'in' ? sm.lbfPerInToNPerMm(v) : v;
+};
+const readTemp = (id, unitId) => {
+  const v = rawNum(id);
+  if (v == null) return null;
+  return $(unitId).value === 'F' ? (v - 32) * 5 / 9 : v;
+};
 const readForce = (id, unitId) => {
   const v = rawNum(id);
   if (v == null) return null;
@@ -2174,6 +2356,17 @@ function fillSelect(sel, opts, { blank = null } = {}) {
 fillSelect($('f-material'), cat.MATERIAL_OPTIONS, { blank: 'any' });
 fillSelect($('a-material'), cat.MATERIAL_OPTIONS);
 fillSelect($('a-ends'), cat.END_OPTIONS);
+fillSelect($('f-ends'), cat.END_OPTIONS, { blank: 'any' });
+
+/** Labels carry the unit the box is read in, so no field is ambiguous. */
+function refreshUnitLabels() {
+  const len = state.lengthUnit === 'in' ? 'in' : 'mm';
+  const rate = state.lengthUnit === 'in' ? 'lbf/in' : 'N/mm';
+  const force = $('f-force-u').value;
+  document.querySelectorAll('[data-unit]').forEach((el) => {
+    el.textContent = { length: len, rate, force }[el.dataset.unit] || '';
+  });
+}
 fillSelect($('a-endcond'), Object.entries(sm.END_CONDITIONS).map(([key, v]) => ({ key, name: v.name })));
 
 /* --------------------------------------------------------- shared report */
@@ -2396,10 +2589,22 @@ function mountViz(container, s, ev) {
 function findRequirements() {
   return {
     targetForce_N: readForce('f-force', 'f-force-u'),
+    minOD_mm: readLen('f-minod'),
     maxOD_mm: readLen('f-maxod'),
     minID_mm: readLen('f-minid'),
+    maxID_mm: readLen('f-maxid'),
+    minWireDia_mm: readLen('f-minwire'),
+    maxWireDia_mm: readLen('f-maxwire'),
+    minFreeLength_mm: readLen('f-minfree'),
     maxFreeLength_mm: readLen('f-maxfree'),
     maxInstalledLength_mm: readLen('f-maxinst'),
+    maxSolidLength_mm: readLen('f-maxsolid'),
+    minRate_Npmm: readRate('f-minrate'),
+    maxRate_Npmm: readRate('f-maxrate'),
+    minRatedLoad_N: readForce('f-minload', 'f-force-u'),
+    minTemperature_C: readTemp('f-mintemp', 'f-temp-u'),
+    straightOnly: $('f-shape').value === 'straight',
+    ends: $('f-ends').value ? [$('f-ends').value] : null,
     positionTol_mm: readLen('f-postol') ?? sm.inToMm(0.010),
     rateTol: (rawNum('f-ratetol') ?? 10) / 100,
     minDeflection_mm: readLen('f-mintravel'),
@@ -2534,6 +2739,7 @@ function renderEquivalents() {
 }
 
 function runFind() {
+  refreshUnitLabels();
   const req = findRequirements();
   renderEquivalents();
   if (!req.targetForce_N) {
@@ -2551,28 +2757,74 @@ function runFind() {
  * The phrase drives the same form the fields do, so what it did is visible
  * and adjustable rather than hidden behind a black box.
  */
+/** Optional controls, so one place knows how to clear them all. */
+const OPTIONAL_NUMBERS = ['f-minod', 'f-maxod', 'f-minid', 'f-maxid', 'f-minwire', 'f-maxwire',
+  'f-minfree', 'f-maxfree', 'f-maxinst', 'f-maxsolid', 'f-minrate', 'f-maxrate', 'f-minload',
+  'f-mintravel', 'f-maxtravel', 'f-mintemp', 'f-postol', 'f-ratetol'];
+const OPTIONAL_SELECTS = { 'f-material': '', 'f-ends': '', 'f-shape': '', 'f-sort': 'robustness' };
+
+/**
+ * Inputs whose meaning depends on the length unit. With one diameter box the
+ * old behaviour -- reinterpret on toggle -- was survivable; across twenty
+ * boxes it silently changes every constraint, so values are converted.
+ */
+const LENGTH_INPUTS = ['f-minod', 'f-maxod', 'f-minid', 'f-maxid', 'f-minwire', 'f-maxwire',
+  'f-minfree', 'f-maxfree', 'f-maxinst', 'f-maxsolid', 'f-mintravel', 'f-postol',
+  'a-od', 'a-id', 'a-wire', 'a-free', 'a-maxdefl', 'a-at', 'a-postol'];
+const RATE_INPUTS = ['f-minrate', 'f-maxrate', 'a-rate'];
+const ANALYSE_FORCE_INPUTS = ['a-maxload'];
+
+/** Switch display units, carrying every typed value across with them. */
+function setLengthUnit(next) {
+  if (!next || next === state.lengthUnit) return;
+  const toIn = next === 'in';
+  const move = (ids, convert) => ids.forEach((id) => {
+    const el = $(id);
+    if (!el || el.value.trim() === '') return;
+    const v = Number(el.value);
+    if (!Number.isFinite(v)) return;
+    el.value = String(+convert(v).toFixed(6));
+  });
+  move(LENGTH_INPUTS, (v) => (toIn ? sm.mmToIn(v) : sm.inToMm(v)));
+  move(RATE_INPUTS, (v) => (toIn ? sm.nPerMmToLbfPerIn(v) : sm.lbfPerInToNPerMm(v)));
+  move(ANALYSE_FORCE_INPUTS, (v) => (toIn ? sm.nToLbf(v) : sm.lbfToN(v)));
+  state.lengthUnit = next;
+  $('f-len-u').value = next;
+  $('a-units').value = next;
+  refreshUnitLabels();
+}
+
+function clearFilters() {
+  OPTIONAL_NUMBERS.forEach((id) => { $(id).value = ''; });
+  Object.entries(OPTIONAL_SELECTS).forEach(([id, v]) => { $(id).value = v; });
+}
+
+/** Parsed field -> the form control it fills. */
 const NL_FIELDS = {
-  maxOD_mm: 'f-maxod', minID_mm: 'f-minid', maxFreeLength_mm: 'f-maxfree',
-  maxInstalledLength_mm: 'f-maxinst', minDeflection_mm: 'f-mintravel',
+  minOD_mm: 'f-minod', maxOD_mm: 'f-maxod',
+  minID_mm: 'f-minid', maxID_mm: 'f-maxid',
+  minWireDia_mm: 'f-minwire', maxWireDia_mm: 'f-maxwire',
+  minFreeLength_mm: 'f-minfree', maxFreeLength_mm: 'f-maxfree',
+  maxInstalledLength_mm: 'f-maxinst', maxSolidLength_mm: 'f-maxsolid',
+  minDeflection_mm: 'f-mintravel',
 };
 const NL_LABELS = {
   force: 'force', maxOD: 'max OD', minID: 'clears a rod of', maxFreeLength: 'max free length',
-  maxInstalledLength: 'max installed length', minDeflection: 'compress at least',
-  material: 'material', sortBy: 'rank by',
+  maxInstalledLength: 'max installed length', maxSolidLength: 'max solid length',
+  minDeflection: 'compress at least', maxID: 'max ID', minOD: 'min OD',
+  minWireDia: 'min wire', maxWireDia: 'max wire',
+  minRate: 'min rate', maxRate: 'max rate',
+  material: 'material', ends: 'end type', sortBy: 'rank by',
 };
 
 function applyParse(res) {
   // A new phrase replaces the old one; stale filters left behind would
   // silently narrow a search the words never asked to narrow.
-  Object.values(NL_FIELDS).forEach((id) => { $(id).value = ''; });
-  $('f-material').value = '';
-  $('f-sort').value = 'robustness';
+  clearFilters();
 
-  if (res.lengthUnit && res.lengthUnit !== state.lengthUnit) {
-    state.lengthUnit = res.lengthUnit;
-    $('f-len-u').value = res.lengthUnit;
-    $('a-units').value = res.lengthUnit;
-  }
+  // Filters were just cleared, so nothing of the phrase's is converted; this
+  // only carries the Analyse tab's numbers across.
+  setLengthUnit(res.lengthUnit);
   const f = res.fields;
   const disp = (mm) => (state.lengthUnit === 'in' ? sm.mmToIn(mm) : mm);
   if (f.force_N != null) {
@@ -2582,7 +2834,10 @@ function applyParse(res) {
   for (const [key, id] of Object.entries(NL_FIELDS)) {
     if (f[key] != null) $(id).value = String(+disp(f[key]).toFixed(4));
   }
+  if (f.minRate_Npmm != null) $('f-minrate').value = String(+(state.lengthUnit === 'in' ? sm.nPerMmToLbfPerIn(f.minRate_Npmm) : f.minRate_Npmm).toFixed(4));
+  if (f.maxRate_Npmm != null) $('f-maxrate').value = String(+(state.lengthUnit === 'in' ? sm.nPerMmToLbfPerIn(f.maxRate_Npmm) : f.maxRate_Npmm).toFixed(4));
   if (f.materialKey) $('f-material').value = f.materialKey;
+  if (f.endsKey) $('f-ends').value = f.endsKey;
   if (f.sortBy) $('f-sort').value = f.sortBy;
   // Show the filters it set, so nothing is applied out of sight.
   if (Object.keys(f).some((k) => k !== 'force_N' && k !== 'forceUnit' && k !== 'forceValue')) {
@@ -2620,16 +2875,13 @@ function runNaturalLanguage() {
 $('f-nl-run').addEventListener('click', runNaturalLanguage);
 $('f-nl').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); runNaturalLanguage(); } });
 
+$('f-reset').addEventListener('click', () => { clearFilters(); $('f-nl').value = ''; $('f-nl-out').innerHTML = ''; runFind(); });
 $('f-run').addEventListener('click', runFind);
-$('f-len-u').addEventListener('change', () => {
-  state.lengthUnit = $('f-len-u').value;
-  $('a-units').value = state.lengthUnit;
-  runFind();
-});
+$('f-len-u').addEventListener('change', () => { setLengthUnit($('f-len-u').value); runFind(); runAnalyse(); });
 document.querySelectorAll('#tab-find input, #tab-find select').forEach((x) =>
   x.addEventListener('keydown', (e) => { if (e.key === 'Enter') runFind(); }));
 $('f-force').addEventListener('input', renderEquivalents);
-$('f-force-u').addEventListener('change', renderEquivalents);
+$('f-force-u').addEventListener('change', () => { renderEquivalents(); refreshUnitLabels(); });
 
 /* ---------------------------------------------------------- ANALYSE tab */
 
@@ -2684,11 +2936,7 @@ function runAnalyse() {
   }
 }
 $('a-run').addEventListener('click', runAnalyse);
-$('a-units').addEventListener('change', () => {
-  state.lengthUnit = $('a-units').value;
-  $('f-len-u').value = state.lengthUnit;
-  runAnalyse();
-});
+$('a-units').addEventListener('change', () => { setLengthUnit($('a-units').value); runAnalyse(); runFind(); });
 $('a-save').addEventListener('click', () => {
   const s = analyseSpring();
   if (s.incomplete) { runAnalyse(); return; }
