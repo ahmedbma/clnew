@@ -68,6 +68,19 @@ details#f-more{margin-top:18px;border-top:1px solid var(--line);padding-top:12px
 details#f-more summary{font:600 12px/1.3 var(--cond);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 details#f-more[open] summary{margin-bottom:4px}
 
+/* natural-language box */
+.nl{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
+.nl-row{display:flex;gap:8px}
+.nl-row input{flex:1;font-size:15px}
+.nl-row button{white-space:nowrap}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 0}
+.chip{display:inline-flex;align-items:baseline;gap:6px;background:var(--accent-soft);
+  border:1px solid var(--line);border-radius:5px;padding:4px 9px;font-size:12.5px}
+.chip b{font:600 11px/1.4 var(--cond);letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.chip span{font-family:var(--mono);font-size:12px;color:var(--ink)}
+.chip.miss{background:var(--warn-soft)}
+.chip.miss span{color:var(--ink)}
+
 /* forms */
 .grid{display:grid;gap:14px 16px;grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
 label{display:block;font:600 11px/1.3 var(--cond);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
@@ -142,9 +155,11 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
 <div class="wrap">
 <header>
   <h1>Off-the-shelf spring calculator</h1>
-  <p>Pick a stock compression spring and get the force it makes at any length &mdash; or start from the
-     force you need and search a vendor catalogue backwards. Built around what McMaster-Carr actually
-     publishes (OD, wire diameter, free length, rate) and derives the rest.</p>
+  <p>Start with the force you need &mdash; it is the only thing this asks for. You get the
+     spring-rate window to filter a vendor's table by, and every catalogue spring that can deliver
+     it, at what length. Size, travel and material are there to narrow the field once the rest of
+     the design demands it, not to get started. Or go the other way: describe a spring you already
+     have and get the force it makes at any length.</p>
 </header>
 
 <nav class="tabs" role="tablist">
@@ -173,9 +188,21 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
       </div>
     </div>
     <p class="equiv" id="f-equiv"></p>
-    <p class="hint">That is the only thing you have to fill in. Everything below narrows the field
-      once you know what else the design demands &mdash; leave it all blank and you get every spring
-      that can make the force.</p>
+    <p class="hint">That is the only thing you have to fill in. Leave everything else blank and you
+      get every spring that can make the force.</p>
+
+    <div class="nl">
+      <label for="f-nl">Or just say what you need</label>
+      <div class="nl-row">
+        <input type="text" id="f-nl" autocomplete="off" spellcheck="false"
+               placeholder="1.5N in a half inch bore, stainless, must clear a 2mm rod">
+        <button class="alt" id="f-nl-run">Read it</button>
+      </div>
+      <p class="hint">Plain words. It fills the boxes below and searches, and tells you exactly what
+        it understood &mdash; and what it could not.</p>
+      <div id="f-nl-out"></div>
+    </div>
+
 
     <details id="f-more">
       <summary>Narrow it down &mdash; all optional</summary>
@@ -188,6 +215,8 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
           <input type="number" id="f-maxfree" placeholder="any length" step="any"></div>
         <div><label for="f-maxinst">Max installed length</label>
           <input type="number" id="f-maxinst" placeholder="any length" step="any"></div>
+        <div><label for="f-mintravel">Compress at least</label>
+          <input type="number" id="f-mintravel" placeholder="any travel" step="any"></div>
         <div><label for="f-material">Material</label>
           <select id="f-material"><option value="">any</option></select></div>
         <div><label for="f-maxtravel">Max share of usable travel</label>
@@ -1002,6 +1031,7 @@ function searchCatalog(springs, req = {}) {
     maxInstalledLength_mm = null, maxSolidLength_mm = null,
     materials = null,
     minTravelHeadroom_mm = 0,
+    minDeflection_mm = null,
     maxTravelUsedFraction = 1,
     sortBy = 'robustness',
     includeRejected = false,
@@ -1027,6 +1057,9 @@ function searchCatalog(springs, req = {}) {
     if (ev.working) {
       if (ev.working.travelHeadroom_mm != null && ev.working.travelHeadroom_mm < minTravelHeadroom_mm) {
         rejected.push(`Only ${ev.working.travelHeadroom_mm.toFixed(2)} mm of travel left past the working point.`);
+      }
+      if (minDeflection_mm != null && ev.working.deflection_mm < minDeflection_mm) {
+        rejected.push(`Reaches the force after only ${ev.working.deflection_mm.toFixed(2)} mm - too stiff for the travel asked for.`);
       }
       if (ev.working.travelUsedFraction != null && ev.working.travelUsedFraction > maxTravelUsedFraction) {
         rejected.push(`Uses ${(ev.working.travelUsedFraction * 100).toFixed(0)}% of usable travel.`);
@@ -1179,7 +1212,10 @@ function parseNumber(text) {
   if (text == null) return null;
   let t = String(text).trim().replace(/,/g, '');
   if (!t) return null;
-  const frac = t.match(FRACTION);
+  // Test the leading numeric run, so "1/8 inch" and "1-1/2 in" read as
+  // fractions rather than falling through to their first digit.
+  const lead = t.match(/^[\d\s./-]+/);
+  const frac = (lead ? lead[0].trim() : t).match(FRACTION);
   if (frac) {
     const whole = frac[1] ? parseInt(frac[1], 10) : 0;
     const n = parseInt(frac[2], 10);
@@ -1744,10 +1780,234 @@ function importAny(text, opts = {}) {
 return { parseNumber, detectUnit, toMm, toNewtons, toNewtonsPerMm, mapHeader, parseTable, rowsToSprings, importTable, springFromForm, toCatalogJson, fromCatalogJson, MATERIAL_OPTIONS, END_OPTIONS, looksLikeSpecSheet, describeSpring, specBlockToSpring, importSpecSheets, importAny };
 })();
 
+const nlq = (() => {
+const { inToMm, resolveMaterial, MATERIALS } = sm;
+const { inToMm, resolveMaterial, MATERIALS } from './spring-math.js';
+import { parseNumber, toMm, toNewtons } = cat;
+/**
+ * nl-query.js -- turn a typed phrase into search parameters.
+ *
+ * Not a language model: a spring request has a small, sharp vocabulary
+ * (a force, a bore, a rod, a length, a travel, a material, a preference),
+ * so it is parsed rather than guessed at. Everything it understands is
+ * reported back with the exact words it came from, and anything it could
+ * not place is reported too -- a silent misread would be worse than no
+ * parsing at all.
+ *
+ * Pure functions, no DOM. Output is SI (mm, N) like the rest of the engine.
+ */
+
+
+
+/* ------------------------------------------------------------ normalising */
+
+/** Words people write instead of digits, plus tidying of quotes and spacing. */
+function normalise(text) {
+  return String(text || '')
+    .toLowerCase()
+    .replace(/[‘’′]/g, "'")
+    .replace(/[“”″]/g, '"')
+    .replace(/[×✕]/g, ' x ')
+    .replace(/\bthree[\s-]?quarters?\b/g, '0.75')
+    .replace(/\b(a|one)[\s-]?half\b/g, '0.5')
+    .replace(/\bhalf\s+(a|an)\b/g, '0.5')
+    .replace(/\bhalf\b/g, '0.5')
+    .replace(/\b(a|one)[\s-]?quarter\b/g, '0.25')
+    .replace(/\bquarter\b/g, '0.25')
+    .replace(/\b(an|one)[\s-]?eighth\b/g, '0.125')
+    .replace(/\beighth\b/g, '0.125')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const FORCE_UNITS = /^(n|newtons?|lbf?|lbs|pounds?|oz|ozf|ounces?|g|gf|grams?|gram-force|kg|kgf|kilograms?)$/;
+
+/** Map a spoken force unit onto the one the form's selector offers. */
+function forceUnitOption(unit) {
+  if (/^(lbf?|lbs|pounds?)$/.test(unit)) return 'lbf';
+  if (/^(oz|ozf|ounces?)$/.test(unit)) return 'ozf';
+  if (/^(g|gf|grams?|gram-force)$/.test(unit)) return 'gf';
+  if (/^(kg|kgf|kilograms?)$/.test(unit)) return 'kgf';
+  return 'N';
+}
+const LENGTH_UNITS = /^("|''|in|ins|inch|inches|mm|millimet(er|re)s?|cm|thou|mil|mils)$/;
+
+/**
+ * Split on clause boundaries. Without this a cue leaks across a comma --
+ * "over a 1/8 shaft, max installed length 0.4in" would read the second
+ * number as another shaft, because "shaft" is still in the look-behind.
+ */
+function clauses(text) {
+  return text.split(/\s*(?:[,;]|\band\b|\bplus\b|\bbut\b)\s*/).map((c) => c.trim()).filter(Boolean);
+}
+
+/** Every number in one clause, with its unit and the words around it. */
+function measurementsIn(text) {
+  const re = /(\d+\s*-\s*\d+\s*\/\s*\d+|\d+\s*\/\s*\d+|\d*\.\d+|\d+)\s*("|''|[a-z]+)?/g;
+  const out = [];
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    const rawUnit = (m[2] || '').trim();
+    const isForce = FORCE_UNITS.test(rawUnit);
+    const isLength = LENGTH_UNITS.test(rawUnit);
+    // A trailing word that is not a unit belongs to the context, not the number.
+    const unit = isForce || isLength ? rawUnit : '';
+    const end = m.index + (unit ? m[0].length : m[1].length);
+    out.push({
+      text: text.slice(m.index, end).trim(),
+      value: parseNumber(m[1]),
+      unit,
+      kind: isForce ? 'force' : isLength ? 'length' : 'bare',
+      before: text.slice(0, m.index),
+      after: text.slice(end),
+    });
+  }
+  return out;
+}
+
+const measurements = (text) => clauses(text).flatMap(measurementsIn);
+
+/* ------------------------------------------------------------ classifying */
+
+// Checked in order; the first cue that matches a measurement's surroundings wins.
+const LENGTH_CUES = [
+  ['minID', /\b(rod|shaft|pin|mandrel|spindle|post|bolt|screw|guide)\b|\bclear(s|ing)?\b|\bover a\b|\baround a\b|\bslip over\b|\bid\b|\binside dia|\binner dia/],
+  ['minDeflection', /\btravel|\bstroke|\bdeflect|\bcompress(es|ed|ion)? by\b|\bsqueeze|\bmovement|\bthrow\b/],
+  ['maxInstalledLength', /\binstalled|\bcompressed (length|lg)|\bworking length|\bat length|\bin place|\bwhen compressed/],
+  ['maxFreeLength', /\bfree length|\blong(er|est)?\b|\blength\b|\btall(er)?\b|\bheight\b|\bdeep(er)?\b/],
+  ['maxOD', /\bod\b|\bo\.d\.|\boutside|\bouter|\bdiameter|\bdia\b|\bbore\b|\bhole\b|\bwide\b|\bwidth\b|\bfits?\b|\binto?\b|\bwithin\b|\bacross\b/],
+];
+
+const MIN_CUE = /\b(at least|minimum|min\.?|no less than|more than|greater than|over)\b\s*$/;
+const MAX_CUE = /\b(at most|maximum|max\.?|no more than|under|less than|below|up to|no bigger than|no longer than|smaller than|within)\b\s*$/;
+
+const SORT_CUES = [
+  ['force-precision', /\b(most )?(precise|accurate|repeatable|consistent|tightest|tight tolerance|least variation|best control)\b/],
+  ['travel', /\b(most|max(imum)?|more|lots of|plenty of|as much) (travel|stroke|headroom)\b/],
+  ['compact', /\b(smallest|most compact|tiniest|shortest|least space|minimum (size|package))\b/],
+  ['rate', /\b(softest|soft(est)? as|lowest rate|gentlest|weakest|most compliant)\b/],
+];
+
+/**
+ * Parse a phrase into search parameters.
+ *
+ * Returns { fields, read, unparsed, lengthUnit }, where `fields` uses the same
+ * names the search form does and `read` explains every decision.
+ */
+function parseQuery(input, { defaultForceUnit = 'N' } = {}) {
+  const text = normalise(input);
+  const fields = {};
+  const read = [];
+  const unparsed = [];
+  if (!text) return { fields, read, unparsed, lengthUnit: null, empty: true };
+
+  const found = measurements(text);
+
+  // Which unit system is the person speaking in? Decide from the lengths they
+  // actually quoted -- the bare preposition "in" is not a unit, and a force
+  // given in ounces says nothing about how they measure a bore.
+  const lengthUnits = found.filter((m) => m.kind === 'length').map((m) => m.unit);
+  const lengthUnit = lengthUnits.some((u) => /^(mm|cm|millimet)/.test(u)) ? 'mm'
+    : lengthUnits.length ? 'in'
+      : /millimet|\bmetric\b/.test(text) ? 'mm' : null;
+  const fallbackLength = lengthUnit || 'in';
+  const forceish = found.filter((m) => m.kind === 'force');
+  const bare = found.filter((m) => m.kind === 'bare');
+
+  const note = (field, m, valueText, extra) =>
+    read.push({ field, from: m.text.trim(), value: valueText, note: extra || null });
+
+  // --- force -----------------------------------------------------------
+  let forceTaken = null;
+  if (forceish.length) {
+    forceTaken = forceish[0];
+    const N = toNewtons(forceTaken.text, defaultForceUnit);
+    if (N != null && N > 0) {
+      fields.force_N = N;
+      fields.forceUnit = forceUnitOption(forceTaken.unit);
+      fields.forceValue = forceTaken.value;
+      note('force', forceTaken, `${N.toFixed(3)} N`);
+    }
+    forceish.slice(1).forEach((m) => unparsed.push({ from: m.text, why: 'a second force — only the first is used' }));
+  } else if (bare.length === 1 && !found.some((m) => m.kind === 'length')) {
+    // A phrase that is just a number is a force in whatever unit is selected.
+    const only = bare[0];
+    const N = toNewtons(`${only.value} ${defaultForceUnit}`, defaultForceUnit);
+    if (N != null && N > 0) {
+      forceTaken = only;
+      fields.force_N = N;
+      fields.forceUnit = defaultForceUnit;
+      fields.forceValue = only.value;
+      note('force', only, `${N.toFixed(3)} N`, `no unit given, read as ${defaultForceUnit}`);
+    }
+  }
+
+  // --- lengths ---------------------------------------------------------
+  for (const m of found) {
+    if (m === forceTaken || m.kind === 'force') continue;
+    if (m.kind === 'bare' && !LENGTH_CUES.some(([, re]) => re.test(m.before) || re.test(m.after))) {
+      unparsed.push({ from: m.text, why: 'no unit and nothing nearby saying what it measures' });
+      continue;
+    }
+    const context = `${m.before} ${m.after}`;
+    const hit = LENGTH_CUES.find(([, re]) => re.test(context));
+    const field = hit ? hit[0] : 'maxOD';
+    const mm = toMm(m.unit ? m.text : `${m.value} ${fallbackLength}`, fallbackLength);
+    if (mm == null || !(mm > 0)) { unparsed.push({ from: m.text, why: 'could not read that as a length' }); continue; }
+
+    // "at least 5mm OD" is a minimum on a field this only filters as a
+    // maximum -- say so rather than quietly reversing the meaning.
+    const wantsMin = MIN_CUE.test(m.before);
+    if (wantsMin && field !== 'minDeflection' && field !== 'minID') {
+      unparsed.push({ from: m.text, why: `read as a minimum, but ${field === 'maxOD' ? 'diameter' : 'length'} is only filtered as a maximum` });
+      continue;
+    }
+    if (MAX_CUE.test(m.before) && field === 'minDeflection') {
+      unparsed.push({ from: m.text, why: 'travel is only filtered as a minimum' });
+      continue;
+    }
+    if (fields[`${field}_mm`] != null) { unparsed.push({ from: m.text, why: 'a second value for the same thing' }); continue; }
+
+    fields[`${field}_mm`] = mm;
+    const shown = fallbackLength === 'mm' ? `${mm.toFixed(2)} mm` : `${(mm / 25.4).toFixed(3)} in`;
+    note(field, m, shown, hit ? null : 'no cue nearby, taken as the outside diameter');
+  }
+
+  // --- material --------------------------------------------------------
+  const materialKey = resolveMaterial(text);
+  if (materialKey) {
+    fields.materialKey = materialKey;
+    read.push({ field: 'material', from: materialKey.replace(/-/g, ' '), value: MATERIALS[materialKey].name });
+  }
+
+  // --- what to optimise for -------------------------------------------
+  for (const [key, re] of SORT_CUES) {
+    const hit = text.match(re);
+    if (hit) {
+      fields.sortBy = key;
+      read.push({ field: 'sortBy', from: hit[0], value: key.replace(/-/g, ' ') });
+      break;
+    }
+  }
+
+  return { fields, read, unparsed, lengthUnit, empty: false };
+}
+
+/** One-line restatement of what a parse understood, for a receipt. */
+function describeParse(result) {
+  if (result.empty) return 'Nothing typed.';
+  if (!result.read.length) return 'Nothing in that could be turned into a search.';
+  return result.read.map((r) => `${r.field}: ${r.value}`).join(' · ');
+}
+
+return { parseQuery, describeParse };
+})();
+
 /**
  * app.js -- browser front end for the spring calculator.
  * All the physics lives in spring-math.js; this file is display and plumbing.
  */
+
 
 
 const $ = (id) => document.getElementById(id);
@@ -2137,6 +2397,7 @@ function findRequirements() {
     maxInstalledLength_mm: readLen('f-maxinst'),
     positionTol_mm: readLen('f-postol') ?? sm.inToMm(0.010),
     rateTol: (rawNum('f-ratetol') ?? 10) / 100,
+    minDeflection_mm: readLen('f-mintravel'),
     maxTravelUsedFraction: (rawNum('f-maxtravel') ?? 100) / 100,
     materials: $('f-material').value ? [$('f-material').value] : null,
     sortBy: $('f-sort').value,
@@ -2281,6 +2542,79 @@ function runFind() {
   renderShopping(req);
   renderResults(req);
 }
+/* --------------------------------------------------- natural language ---
+ * The phrase drives the same form the fields do, so what it did is visible
+ * and adjustable rather than hidden behind a black box.
+ */
+const NL_FIELDS = {
+  maxOD_mm: 'f-maxod', minID_mm: 'f-minid', maxFreeLength_mm: 'f-maxfree',
+  maxInstalledLength_mm: 'f-maxinst', minDeflection_mm: 'f-mintravel',
+};
+const NL_LABELS = {
+  force: 'force', maxOD: 'max OD', minID: 'clears a rod of', maxFreeLength: 'max free length',
+  maxInstalledLength: 'max installed length', minDeflection: 'compress at least',
+  material: 'material', sortBy: 'rank by',
+};
+
+function applyParse(res) {
+  // A new phrase replaces the old one; stale filters left behind would
+  // silently narrow a search the words never asked to narrow.
+  Object.values(NL_FIELDS).forEach((id) => { $(id).value = ''; });
+  $('f-material').value = '';
+  $('f-sort').value = 'robustness';
+
+  if (res.lengthUnit && res.lengthUnit !== state.lengthUnit) {
+    state.lengthUnit = res.lengthUnit;
+    $('f-len-u').value = res.lengthUnit;
+    $('a-units').value = res.lengthUnit;
+  }
+  const f = res.fields;
+  const disp = (mm) => (state.lengthUnit === 'in' ? sm.mmToIn(mm) : mm);
+  if (f.force_N != null) {
+    $('f-force-u').value = f.forceUnit || 'N';
+    $('f-force').value = String(+(f.forceValue ?? sm.nToLbf(f.force_N)).toFixed(6));
+  }
+  for (const [key, id] of Object.entries(NL_FIELDS)) {
+    if (f[key] != null) $(id).value = String(+disp(f[key]).toFixed(4));
+  }
+  if (f.materialKey) $('f-material').value = f.materialKey;
+  if (f.sortBy) $('f-sort').value = f.sortBy;
+  // Show the filters it set, so nothing is applied out of sight.
+  if (Object.keys(f).some((k) => k !== 'force_N' && k !== 'forceUnit' && k !== 'forceValue')) {
+    $('f-more').open = true;
+  }
+}
+
+function renderParse(res) {
+  const box = $('f-nl-out');
+  if (res.empty) { box.innerHTML = ''; return; }
+  if (!res.read.length) {
+    box.innerHTML = `<div class="callout warn"><p>Nothing in that could be turned into a search.
+      Try something like <em>1.5N in a half inch bore</em> — a force, and any limits that matter.</p></div>`;
+    return;
+  }
+  const chips = res.read.map((r) => `<span class="chip"><b>${esc(NL_LABELS[r.field] || r.field)}</b>
+    <span>${esc(r.value)}</span></span>`).join('');
+  const misses = res.unparsed.map((u) => `<span class="chip miss"><b>skipped</b>
+    <span>${esc(u.from)}</span></span>`).join('');
+  const why = res.unparsed.length
+    ? `<p class="hint">${res.unparsed.map((u) => `<strong>${esc(u.from)}</strong> — ${esc(u.why)}`).join('<br>')}</p>`
+    : '';
+  const notes = res.read.filter((r) => r.note);
+  box.innerHTML = `<div class="chips">${chips}${misses}</div>${why}
+    ${notes.length ? `<p class="hint">${notes.map((n) => `<strong>${esc(n.from)}</strong> — ${esc(n.note)}`).join('<br>')}</p>` : ''}`;
+}
+
+function runNaturalLanguage() {
+  const res = nlq.parseQuery($('f-nl').value, { defaultForceUnit: $('f-force-u').value });
+  renderParse(res);
+  if (res.empty || !res.read.length) return;
+  applyParse(res);
+  runFind();
+}
+$('f-nl-run').addEventListener('click', runNaturalLanguage);
+$('f-nl').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); runNaturalLanguage(); } });
+
 $('f-run').addEventListener('click', runFind);
 $('f-len-u').addEventListener('change', () => {
   state.lengthUnit = $('f-len-u').value;

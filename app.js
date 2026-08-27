@@ -4,6 +4,7 @@
  */
 import * as sm from './spring-math.js';
 import * as cat from './catalog.js';
+import * as nlq from './nl-query.js';
 
 const $ = (id) => document.getElementById(id);
 const STORE_KEY = 'springcalc.catalog.v1';
@@ -392,6 +393,7 @@ function findRequirements() {
     maxInstalledLength_mm: readLen('f-maxinst'),
     positionTol_mm: readLen('f-postol') ?? sm.inToMm(0.010),
     rateTol: (rawNum('f-ratetol') ?? 10) / 100,
+    minDeflection_mm: readLen('f-mintravel'),
     maxTravelUsedFraction: (rawNum('f-maxtravel') ?? 100) / 100,
     materials: $('f-material').value ? [$('f-material').value] : null,
     sortBy: $('f-sort').value,
@@ -536,6 +538,79 @@ function runFind() {
   renderShopping(req);
   renderResults(req);
 }
+/* --------------------------------------------------- natural language ---
+ * The phrase drives the same form the fields do, so what it did is visible
+ * and adjustable rather than hidden behind a black box.
+ */
+const NL_FIELDS = {
+  maxOD_mm: 'f-maxod', minID_mm: 'f-minid', maxFreeLength_mm: 'f-maxfree',
+  maxInstalledLength_mm: 'f-maxinst', minDeflection_mm: 'f-mintravel',
+};
+const NL_LABELS = {
+  force: 'force', maxOD: 'max OD', minID: 'clears a rod of', maxFreeLength: 'max free length',
+  maxInstalledLength: 'max installed length', minDeflection: 'compress at least',
+  material: 'material', sortBy: 'rank by',
+};
+
+function applyParse(res) {
+  // A new phrase replaces the old one; stale filters left behind would
+  // silently narrow a search the words never asked to narrow.
+  Object.values(NL_FIELDS).forEach((id) => { $(id).value = ''; });
+  $('f-material').value = '';
+  $('f-sort').value = 'robustness';
+
+  if (res.lengthUnit && res.lengthUnit !== state.lengthUnit) {
+    state.lengthUnit = res.lengthUnit;
+    $('f-len-u').value = res.lengthUnit;
+    $('a-units').value = res.lengthUnit;
+  }
+  const f = res.fields;
+  const disp = (mm) => (state.lengthUnit === 'in' ? sm.mmToIn(mm) : mm);
+  if (f.force_N != null) {
+    $('f-force-u').value = f.forceUnit || 'N';
+    $('f-force').value = String(+(f.forceValue ?? sm.nToLbf(f.force_N)).toFixed(6));
+  }
+  for (const [key, id] of Object.entries(NL_FIELDS)) {
+    if (f[key] != null) $(id).value = String(+disp(f[key]).toFixed(4));
+  }
+  if (f.materialKey) $('f-material').value = f.materialKey;
+  if (f.sortBy) $('f-sort').value = f.sortBy;
+  // Show the filters it set, so nothing is applied out of sight.
+  if (Object.keys(f).some((k) => k !== 'force_N' && k !== 'forceUnit' && k !== 'forceValue')) {
+    $('f-more').open = true;
+  }
+}
+
+function renderParse(res) {
+  const box = $('f-nl-out');
+  if (res.empty) { box.innerHTML = ''; return; }
+  if (!res.read.length) {
+    box.innerHTML = `<div class="callout warn"><p>Nothing in that could be turned into a search.
+      Try something like <em>1.5N in a half inch bore</em> — a force, and any limits that matter.</p></div>`;
+    return;
+  }
+  const chips = res.read.map((r) => `<span class="chip"><b>${esc(NL_LABELS[r.field] || r.field)}</b>
+    <span>${esc(r.value)}</span></span>`).join('');
+  const misses = res.unparsed.map((u) => `<span class="chip miss"><b>skipped</b>
+    <span>${esc(u.from)}</span></span>`).join('');
+  const why = res.unparsed.length
+    ? `<p class="hint">${res.unparsed.map((u) => `<strong>${esc(u.from)}</strong> — ${esc(u.why)}`).join('<br>')}</p>`
+    : '';
+  const notes = res.read.filter((r) => r.note);
+  box.innerHTML = `<div class="chips">${chips}${misses}</div>${why}
+    ${notes.length ? `<p class="hint">${notes.map((n) => `<strong>${esc(n.from)}</strong> — ${esc(n.note)}`).join('<br>')}</p>` : ''}`;
+}
+
+function runNaturalLanguage() {
+  const res = nlq.parseQuery($('f-nl').value, { defaultForceUnit: $('f-force-u').value });
+  renderParse(res);
+  if (res.empty || !res.read.length) return;
+  applyParse(res);
+  runFind();
+}
+$('f-nl-run').addEventListener('click', runNaturalLanguage);
+$('f-nl').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); runNaturalLanguage(); } });
+
 $('f-run').addEventListener('click', runFind);
 $('f-len-u').addEventListener('change', () => {
   state.lengthUnit = $('f-len-u').value;

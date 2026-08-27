@@ -72,6 +72,19 @@ details#f-more{margin-top:18px;border-top:1px solid var(--line);padding-top:12px
 details#f-more summary{font:600 12px/1.3 var(--cond);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 details#f-more[open] summary{margin-bottom:4px}
 
+/* natural-language box */
+.nl{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
+.nl-row{display:flex;gap:8px}
+.nl-row input{flex:1;font-size:15px}
+.nl-row button{white-space:nowrap}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 0}
+.chip{display:inline-flex;align-items:baseline;gap:6px;background:var(--accent-soft);
+  border:1px solid var(--line);border-radius:5px;padding:4px 9px;font-size:12.5px}
+.chip b{font:600 11px/1.4 var(--cond);letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.chip span{font-family:var(--mono);font-size:12px;color:var(--ink)}
+.chip.miss{background:var(--warn-soft)}
+.chip.miss span{color:var(--ink)}
+
 /* forms */
 .grid{display:grid;gap:14px 16px;grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
 label{display:block;font:600 11px/1.3 var(--cond);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
@@ -147,9 +160,11 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
 <div class="wrap">
 <header>
   <h1>Off-the-shelf spring calculator</h1>
-  <p>Pick a stock compression spring and get the force it makes at any length &mdash; or start from the
-     force you need and search a vendor catalogue backwards. Built around what McMaster-Carr actually
-     publishes (OD, wire diameter, free length, rate) and derives the rest.</p>
+  <p>Start with the force you need &mdash; it is the only thing this asks for. You get the
+     spring-rate window to filter a vendor's table by, and every catalogue spring that can deliver
+     it, at what length. Size, travel and material are there to narrow the field once the rest of
+     the design demands it, not to get started. Or go the other way: describe a spring you already
+     have and get the force it makes at any length.</p>
 </header>
 
 <nav class="tabs" role="tablist">
@@ -178,9 +193,21 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
       </div>
     </div>
     <p class="equiv" id="f-equiv"></p>
-    <p class="hint">That is the only thing you have to fill in. Everything below narrows the field
-      once you know what else the design demands &mdash; leave it all blank and you get every spring
-      that can make the force.</p>
+    <p class="hint">That is the only thing you have to fill in. Leave everything else blank and you
+      get every spring that can make the force.</p>
+
+    <div class="nl">
+      <label for="f-nl">Or just say what you need</label>
+      <div class="nl-row">
+        <input type="text" id="f-nl" autocomplete="off" spellcheck="false"
+               placeholder="1.5N in a half inch bore, stainless, must clear a 2mm rod">
+        <button class="alt" id="f-nl-run">Read it</button>
+      </div>
+      <p class="hint">Plain words. It fills the boxes below and searches, and tells you exactly what
+        it understood &mdash; and what it could not.</p>
+      <div id="f-nl-out"></div>
+    </div>
+
 
     <details id="f-more">
       <summary>Narrow it down &mdash; all optional</summary>
@@ -193,6 +220,8 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
           <input type="number" id="f-maxfree" placeholder="any length" step="any"></div>
         <div><label for="f-maxinst">Max installed length</label>
           <input type="number" id="f-maxinst" placeholder="any length" step="any"></div>
+        <div><label for="f-mintravel">Compress at least</label>
+          <input type="number" id="f-mintravel" placeholder="any travel" step="any"></div>
         <div><label for="f-material">Material</label>
           <select id="f-material"><option value="">any</option></select></div>
         <div><label for="f-maxtravel">Max share of usable travel</label>

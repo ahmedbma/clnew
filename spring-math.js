@@ -622,6 +622,7 @@ export function searchCatalog(springs, req = {}) {
     maxInstalledLength_mm = null, maxSolidLength_mm = null,
     materials = null,
     minTravelHeadroom_mm = 0,
+    minDeflection_mm = null,
     maxTravelUsedFraction = 1,
     sortBy = 'robustness',
     includeRejected = false,
@@ -647,6 +648,9 @@ export function searchCatalog(springs, req = {}) {
     if (ev.working) {
       if (ev.working.travelHeadroom_mm != null && ev.working.travelHeadroom_mm < minTravelHeadroom_mm) {
         rejected.push(`Only ${ev.working.travelHeadroom_mm.toFixed(2)} mm of travel left past the working point.`);
+      }
+      if (minDeflection_mm != null && ev.working.deflection_mm < minDeflection_mm) {
+        rejected.push(`Reaches the force after only ${ev.working.deflection_mm.toFixed(2)} mm - too stiff for the travel asked for.`);
       }
       if (ev.working.travelUsedFraction != null && ev.working.travelUsedFraction > maxTravelUsedFraction) {
         rejected.push(`Uses ${(ev.working.travelUsedFraction * 100).toFixed(0)}% of usable travel.`);

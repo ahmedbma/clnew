@@ -24,7 +24,10 @@ export function parseNumber(text) {
   if (text == null) return null;
   let t = String(text).trim().replace(/,/g, '');
   if (!t) return null;
-  const frac = t.match(FRACTION);
+  // Test the leading numeric run, so "1/8 inch" and "1-1/2 in" read as
+  // fractions rather than falling through to their first digit.
+  const lead = t.match(/^[\d\s./-]+/);
+  const frac = (lead ? lead[0].trim() : t).match(FRACTION);
   if (frac) {
     const whole = frac[1] ? parseInt(frac[1], 10) : 0;
     const n = parseInt(frac[2], 10);

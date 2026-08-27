@@ -26,6 +26,26 @@ spring physically ends up (dF/dx = k). A stiff spring nudged slightly is a bad w
 to make a small force; a soft spring compressed a long way is a good one. Both
 contributions are broken out, worst case and RSS.
 
+## Saying it in words
+
+There is a text box above the fields: type *"1.5N in a half inch bore, stainless,
+must clear a 2mm rod"* and it fills the fields and searches.
+
+It is a parser (`nl-query.js`), not a language model — no API key, no network, no
+cost, and it works offline in the standalone build. A spring request has a small,
+sharp vocabulary, so it is parsed rather than guessed at: a force in any unit,
+spoken fractions (*half inch*, *1/8*, *1-1/2*), a bore, a rod to clear, a free or
+installed length, a minimum travel, a material, and a preference (*softest*,
+*smallest*, *as precise as possible*).
+
+Two rules make it trustworthy rather than magic. Everything it understood is shown
+back as chips with the words it came from, and **everything it could not place is
+shown too** with the reason — a silent misread would be worse than no parsing.
+And it drives the visible fields rather than a hidden state, so you can see and
+adjust whatever it did. Where the meaning is genuinely ambiguous it refuses:
+*"at least 5mm OD"* is reported as unparsed rather than quietly reversed into a
+maximum, because diameter is only filtered as an upper bound.
+
 ## The shared catalogue
 
 `data/catalogue.json` is the list every visitor sees on their first visit, in any
@@ -84,7 +104,8 @@ every field the tool worked out rather than read is labelled `derived`.
 | file | what it is |
 |---|---|
 | `spring-math.js` | the engine — materials, end types, rate, stress, buckling, derivation, search, catalogue-free design space. Pure functions, no DOM, no dependencies. |
-| `catalog.js` | pasted-table and CSV parsing, unit handling, persistence. |
+| `catalog.js` | pasted-table, spec-sheet and CSV parsing, unit handling, persistence. |
+| `nl-query.js` | the plain-English query parser. No model, no network. |
 | `app.js` / `index.html` | the browser UI. |
 | `cli.mjs` | the same engine from a terminal. |
 | `test/spring-math.test.mjs` | `node --test 'test/*.test.mjs'` |

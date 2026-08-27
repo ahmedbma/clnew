@@ -35,15 +35,20 @@ function wrapModule(src, varName, preamble = '') {
 
 const math = read('./spring-math.js');
 const catalog = read('./catalog.js');
+const nlQuery = read('./nl-query.js');
 const app = read('./app.js');
 
 // catalog.js pulls a fixed set of names out of spring-math.js.
-const catImports = catalog.match(/import\s*\{([\s\S]*?)\}\s*from\s*['"]\.\/spring-math\.js['"]/);
-const bound = catImports[1].split(',').map((x) => x.trim()).filter(Boolean).join(', ');
+const named = (src, from) => {
+  const m = src.match(new RegExp(`import\\s*\\{([\\s\\S]*?)\\}\\s*from\\s*['"]\\./${from}\\.js['"]`));
+  return m ? m[1].split(',').map((x) => x.trim()).filter(Boolean).join(', ') : '';
+};
 
 const bundle = [
   wrapModule(math, 'sm'),
-  wrapModule(catalog, 'cat', `const { ${bound} } = sm;`),
+  wrapModule(catalog, 'cat', `const { ${named(catalog, 'spring-math')} } = sm;`),
+  wrapModule(nlQuery, 'nlq',
+    `const { ${named(nlQuery, 'spring-math')} } = sm;\nconst { ${named(nlQuery, 'catalog')} } = cat;`),
   app.replace(/^import\s[\s\S]*?from\s+['"][^'"]+['"];\s*$/gm, ''),
 ].join('\n');
 
