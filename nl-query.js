@@ -268,6 +268,24 @@ export function parseQuery(input, { defaultForceUnit = 'N' } = {}) {
     }
   }
 
+  // --- cut-to-length stock ---------------------------------------------
+  // Worth its own cue: it is the difference between a finished spring and a
+  // coil of stock, and people say so plainly one way or the other.
+  const CUT = /cut[\s-]*to[\s-]*length|cut[\s-]*to[\s-]*fit|cuttable/;
+  const cut = text.match(CUT);
+  if (cut) {
+    const head = text.slice(0, cut.index);
+    const negated = /\b(no|not|non|without|exclude|excluding|avoid|skip|except|other than|besides)\b[^.]{0,20}$/.test(head)
+      || /\b(ready[\s-]*made|finished|off[\s-]*the[\s-]*shelf)\b/.test(text);
+    fields.cutToLength = negated ? 'exclude' : 'only';
+    read.push({ field: 'cutToLength', from: cut[0],
+      value: negated ? 'excluded' : 'cut-to-length stock only' });
+  } else if (/\b(ready[\s-]*made|finished|off[\s-]*the[\s-]*shelf)\b/.test(text)) {
+    fields.cutToLength = 'exclude';
+    read.push({ field: 'cutToLength', from: text.match(/\b(ready[\s-]*made|finished|off[\s-]*the[\s-]*shelf)\b/)[0],
+      value: 'excluded' });
+  }
+
   // --- what to optimise for -------------------------------------------
   for (const [key, re] of SORT_CUES) {
     const hit = text.match(re);

@@ -450,6 +450,7 @@ function findRequirements() {
     minRatedLoad_N: readForce('f-minload', 'f-force-u'),
     minTemperature_C: readTemp('f-mintemp', 'f-temp-u'),
     straightOnly: $('f-shape').value === 'straight',
+    cutToLength: $('f-cut').value || 'any',
     ends: $('f-ends').value ? [$('f-ends').value] : null,
     families: $('f-family').value ? [$('f-family').value] : null,
     positionTol_mm: readLen('f-postol') ?? sm.inToMm(0.010),
@@ -598,7 +599,8 @@ function runFind() {
 const OPTIONAL_NUMBERS = ['f-minod', 'f-maxod', 'f-minid', 'f-maxid', 'f-minwire', 'f-maxwire',
   'f-minfree', 'f-maxfree', 'f-maxinst', 'f-maxsolid', 'f-minrate', 'f-maxrate', 'f-minload',
   'f-mintravel', 'f-maxtravel', 'f-mintemp', 'f-postol', 'f-ratetol'];
-const OPTIONAL_SELECTS = { 'f-material': '', 'f-ends': '', 'f-shape': '', 'f-family': '', 'f-sort': 'robustness' };
+const OPTIONAL_SELECTS = { 'f-material': '', 'f-ends': '', 'f-shape': '', 'f-family': '',
+  'f-cut': '', 'f-sort': 'robustness' };
 
 /**
  * Inputs whose meaning depends on the length unit. With one diameter box the
@@ -654,6 +656,7 @@ const NL_LABELS = {
   minWireDia: 'min wire', maxWireDia: 'max wire',
   minRate: 'min rate', maxRate: 'max rate',
   material: 'material', ends: 'end type', sortBy: 'rank by',
+  cutToLength: 'cut-to-length',
 };
 
 function applyParse(res) {
@@ -678,6 +681,7 @@ function applyParse(res) {
   if (f.materialKey) $('f-material').value = f.materialKey;
   if (f.endsKey) $('f-ends').value = f.endsKey;
   if (f.sortBy) $('f-sort').value = f.sortBy;
+  if (f.cutToLength) $('f-cut').value = f.cutToLength === 'exclude' ? 'exclude' : 'only';
   // Show the filters it set, so nothing is applied out of sight.
   if (Object.keys(f).some((k) => k !== 'force_N' && k !== 'forceUnit' && k !== 'forceValue')) {
     $('f-more').open = true;
@@ -1060,6 +1064,8 @@ function springColumns(pick) {
         ? `<a href="${esc(p(r).url)}" target="_blank" rel="noopener">${esc(springName(p(r)))}</a>`
         : esc(springName(p(r)))) }),
     col({ key: 'family', label: 'family', kind: 'select', align: 'l', text: (r) => p(r).family || '' }),
+    col({ key: 'cut', label: 'cut to length', kind: 'select', align: 'l',
+      derivedKey: 'cutToLength', text: (r) => (p(r).cutToLength ? 'yes' : 'no') }),
     col({ key: 'material', label: 'material', kind: 'select', align: 'l',
       derivedKey: 'materialKey', text: (r) => p(r).material || '' }),
     col({ key: 'ends', label: 'ends', kind: 'select', align: 'l',

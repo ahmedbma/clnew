@@ -530,3 +530,40 @@ test('a Fahrenheit rating converts on the way in', () => {
   close(cat.toCelsius('850° F'), 454.44, 1e-4);
   close(cat.toCelsius('200 C'), 200);
 });
+
+test('cut-to-length stock is flagged, warned about and filterable', () => {
+  // Nothing in a vendor record says "cut to length" except the product
+  // family, so that is where it has to be read from.
+  const stock = sm.normalizeSpring({
+    partNumber: 'X1', family: 'Cut-to-Length Compression Springs',
+    od_mm: 10, wireDia_mm: 1, freeLength_mm: 900, rate_Npmm: 0.15,
+  });
+  assert.equal(stock.cutToLength, true);
+  assert.ok(stock.derived.includes('cutToLength'));
+  // The rate is only the rate at the length you buy -- cutting changes it,
+  // and a search that hid that would be lying about the force.
+  assert.ok(stock.warnings.some((w) => /half the length is about twice the rate/.test(w)));
+
+  const made = sm.normalizeSpring({
+    partNumber: 'X2', family: 'Compression Springs',
+    od_mm: 10, wireDia_mm: 1, freeLength_mm: 40, rate_Npmm: 2,
+  });
+  assert.equal(made.cutToLength, false);
+  assert.ok(made.derived.includes('cutToLength'), 'a "no" is inferred from the family too');
+  assert.ok(!made.warnings.some((w) => /cut-to-length/i.test(w)));
+
+  // An explicit flag beats the family name either way round.
+  assert.equal(sm.normalizeSpring({ family: 'Compression Springs', cutToLength: true, od_mm: 5 }).cutToLength, true);
+  assert.equal(sm.normalizeSpring({ family: 'Cut-to-Length Compression Springs', cutToLength: false, od_mm: 5 }).cutToLength, false);
+
+  const springs = [stock, made];
+  const keys = (req) => sm.searchCatalog(springs, { targetForce_N: 2, ...req })
+    .filter((r) => r.ok).map((r) => r.spring.partNumber);
+  assert.deepEqual(keys({}).sort(), ['X1', 'X2']);
+  assert.deepEqual(keys({ cutToLength: 'exclude' }), ['X2']);
+  assert.deepEqual(keys({ cutToLength: 'only' }), ['X1']);
+
+  // Excluded is not the same as unexplained: the row still says why.
+  const [why] = sm.searchCatalog([stock], { targetForce_N: 2, cutToLength: 'exclude', includeRejected: true });
+  assert.match(why.rejected.join(' '), /Cut-to-length stock, excluded/);
+});

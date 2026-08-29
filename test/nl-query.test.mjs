@@ -166,3 +166,17 @@ test('a long phrase fills many filters at once without collisions', () => {
   assert.equal(r.endsKey, 'closed-and-ground');
   assert.equal(r.materialKey, 'stainless-302');
 });
+
+test('cut-to-length is asked for, or asked away, in plain words', () => {
+  const cut = (t) => f(t).cutToLength;
+  assert.equal(cut('1.5N, no cut-to-length'), 'exclude');
+  assert.equal(cut('1.5N excluding cut to length springs'), 'exclude');
+  assert.equal(cut('1.5N ready-made only'), 'exclude');
+  assert.equal(cut('1.5N cut-to-length only'), 'only');
+  assert.equal(cut('1.5N cuttable stock'), 'only');
+  assert.equal(cut('1.5N in a half inch bore'), undefined);
+
+  // Whatever it decides, it says so on the receipt rather than silently.
+  const res = parseQuery('1.5N, no cut-to-length');
+  assert.ok(res.read.some((r) => r.field === 'cutToLength' && r.value === 'excluded'));
+});

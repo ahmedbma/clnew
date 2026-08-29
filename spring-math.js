@@ -339,10 +339,29 @@ const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
  *     freeLength_mm, solidLength_mm, rate_Npmm, maxLoad_N, maxDeflection_mm,
  *     totalCoils, activeCoils, G_GPa }
  */
+const CUT_TO_LENGTH_RE = /cut[\s-]*to[\s-]*length/i;
+
 export function normalizeSpring(raw) {
   const s = { ...raw };
   const derived = [];
   const warnings = [];
+
+  // Cut-to-length stock is a different thing to buy: you get a long coil and
+  // cut what you need. Vendors do not flag it in a field, only in the product
+  // family, so read it from there unless the record says outright.
+  if (s.cutToLength == null) {
+    // Read off the family name either way round -- a "no" is just as much an
+    // inference as a "yes", so both are marked as worked out, not published.
+    s.cutToLength = CUT_TO_LENGTH_RE.test(String(s.family || ''));
+    derived.push('cutToLength');
+  } else {
+    s.cutToLength = Boolean(s.cutToLength);
+  }
+  if (s.cutToLength) {
+    warnings.push('Sold as cut-to-length stock: the free length is the length of the coil you buy, '
+      + 'and the rate holds for that whole length. Cut it shorter and you remove active coils, '
+      + 'so the rate goes up roughly in proportion - half the length is about twice the rate.');
+  }
 
   // A material named but not recognised is left unknown: inventing properties
   // for it would put a confident wrong stress number on the screen. A material
@@ -678,6 +697,7 @@ export function evaluate(springIn, opts = {}) {
  *   materials                array of material keys to allow
  *   minTravelHeadroom_mm     insist on this much unused travel
  *   maxTravelUsedFraction    e.g. 0.8 -- do not sit near the travel limit
+ *   cutToLength              'any' | 'exclude' | 'only' -- long stock you cut yourself
  *   sortBy                   'robustness' | 'travel' | 'compact' | 'rate' | 'force-precision'
  */
 export function searchCatalog(springs, req = {}) {
@@ -692,6 +712,7 @@ export function searchCatalog(springs, req = {}) {
     minRatedLoad_N = null,
     minTemperature_C = null,
     straightOnly = false,
+    cutToLength = 'any',
     materials = null, ends = null, families = null,
     minTravelHeadroom_mm = 0,
     minDeflection_mm = null,
@@ -727,6 +748,8 @@ export function searchCatalog(springs, req = {}) {
       rejected.push(`Rated to ${s.maxTemp_C.toFixed(0)} C, below the ${minTemperature_C.toFixed(0)} C asked for.`);
     }
     if (straightOnly && s.nonLinearShape) rejected.push(`Listed as ${s.nonLinearShape}, not a straight cylindrical spring.`);
+    if (cutToLength === 'exclude' && s.cutToLength) rejected.push('Cut-to-length stock, excluded.');
+    if (cutToLength === 'only' && !s.cutToLength) rejected.push('Not cut-to-length stock.');
     if (materials && materials.length && !materials.includes(s.materialKey)) rejected.push('Material excluded.');
     if (ends && ends.length && !ends.includes(s.endsKey)) rejected.push('End type excluded.');
     if (families && families.length && !families.includes(s.family)) rejected.push(`${s.family || 'Unlisted product family'} excluded.`);

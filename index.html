@@ -304,8 +304,15 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
         <div><label for="f-ends">End type</label>
           <select id="f-ends"><option value="">any</option></select></div>
         <div><label for="f-family">Product family</label>
-          <select id="f-family"><option value="">any</option></select>
-          <div class="hint">Cut-to-length stock is priced by the coil and cut to suit.</div></div>
+          <select id="f-family"><option value="">any</option></select></div>
+        <div><label for="f-cut">Cut-to-length stock</label>
+          <select id="f-cut">
+            <option value="">include</option>
+            <option value="exclude">exclude &mdash; ready-made springs only</option>
+            <option value="only">only cut-to-length</option>
+          </select>
+          <div class="hint">Long coils you cut yourself. Cutting removes active coils, so the
+            published rate only holds at the full length.</div></div>
         <div><label for="f-shape">Coil shape</label>
           <select id="f-shape">
             <option value="">any</option>

@@ -304,8 +304,15 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
         <div><label for="f-ends">End type</label>
           <select id="f-ends"><option value="">any</option></select></div>
         <div><label for="f-family">Product family</label>
-          <select id="f-family"><option value="">any</option></select>
-          <div class="hint">Cut-to-length stock is priced by the coil and cut to suit.</div></div>
+          <select id="f-family"><option value="">any</option></select></div>
+        <div><label for="f-cut">Cut-to-length stock</label>
+          <select id="f-cut">
+            <option value="">include</option>
+            <option value="exclude">exclude &mdash; ready-made springs only</option>
+            <option value="only">only cut-to-length</option>
+          </select>
+          <div class="hint">Long coils you cut yourself. Cutting removes active coils, so the
+            published rate only holds at the full length.</div></div>
         <div><label for="f-shape">Coil shape</label>
           <select id="f-shape">
             <option value="">any</option>
@@ -847,10 +854,29 @@ const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
  *     freeLength_mm, solidLength_mm, rate_Npmm, maxLoad_N, maxDeflection_mm,
  *     totalCoils, activeCoils, G_GPa }
  */
+const CUT_TO_LENGTH_RE = /cut[\s-]*to[\s-]*length/i;
+
 function normalizeSpring(raw) {
   const s = { ...raw };
   const derived = [];
   const warnings = [];
+
+  // Cut-to-length stock is a different thing to buy: you get a long coil and
+  // cut what you need. Vendors do not flag it in a field, only in the product
+  // family, so read it from there unless the record says outright.
+  if (s.cutToLength == null) {
+    // Read off the family name either way round -- a "no" is just as much an
+    // inference as a "yes", so both are marked as worked out, not published.
+    s.cutToLength = CUT_TO_LENGTH_RE.test(String(s.family || ''));
+    derived.push('cutToLength');
+  } else {
+    s.cutToLength = Boolean(s.cutToLength);
+  }
+  if (s.cutToLength) {
+    warnings.push('Sold as cut-to-length stock: the free length is the length of the coil you buy, '
+      + 'and the rate holds for that whole length. Cut it shorter and you remove active coils, '
+      + 'so the rate goes up roughly in proportion - half the length is about twice the rate.');
+  }
 
   // A material named but not recognised is left unknown: inventing properties
   // for it would put a confident wrong stress number on the screen. A material
@@ -1186,6 +1212,7 @@ function evaluate(springIn, opts = {}) {
  *   materials                array of material keys to allow
  *   minTravelHeadroom_mm     insist on this much unused travel
  *   maxTravelUsedFraction    e.g. 0.8 -- do not sit near the travel limit
+ *   cutToLength              'any' | 'exclude' | 'only' -- long stock you cut yourself
  *   sortBy                   'robustness' | 'travel' | 'compact' | 'rate' | 'force-precision'
  */
 function searchCatalog(springs, req = {}) {
@@ -1200,6 +1227,7 @@ function searchCatalog(springs, req = {}) {
     minRatedLoad_N = null,
     minTemperature_C = null,
     straightOnly = false,
+    cutToLength = 'any',
     materials = null, ends = null, families = null,
     minTravelHeadroom_mm = 0,
     minDeflection_mm = null,
@@ -1235,6 +1263,8 @@ function searchCatalog(springs, req = {}) {
       rejected.push(`Rated to ${s.maxTemp_C.toFixed(0)} C, below the ${minTemperature_C.toFixed(0)} C asked for.`);
     }
     if (straightOnly && s.nonLinearShape) rejected.push(`Listed as ${s.nonLinearShape}, not a straight cylindrical spring.`);
+    if (cutToLength === 'exclude' && s.cutToLength) rejected.push('Cut-to-length stock, excluded.');
+    if (cutToLength === 'only' && !s.cutToLength) rejected.push('Not cut-to-length stock.');
     if (materials && materials.length && !materials.includes(s.materialKey)) rejected.push('Material excluded.');
     if (ends && ends.length && !ends.includes(s.endsKey)) rejected.push('End type excluded.');
     if (families && families.length && !families.includes(s.family)) rejected.push(`${s.family || 'Unlisted product family'} excluded.`);
@@ -2258,6 +2288,24 @@ function parseQuery(input, { defaultForceUnit = 'N' } = {}) {
     }
   }
 
+  // --- cut-to-length stock ---------------------------------------------
+  // Worth its own cue: it is the difference between a finished spring and a
+  // coil of stock, and people say so plainly one way or the other.
+  const CUT = /cut[\s-]*to[\s-]*length|cut[\s-]*to[\s-]*fit|cuttable/;
+  const cut = text.match(CUT);
+  if (cut) {
+    const head = text.slice(0, cut.index);
+    const negated = /\b(no|not|non|without|exclude|excluding|avoid|skip|except|other than|besides)\b[^.]{0,20}$/.test(head)
+      || /\b(ready[\s-]*made|finished|off[\s-]*the[\s-]*shelf)\b/.test(text);
+    fields.cutToLength = negated ? 'exclude' : 'only';
+    read.push({ field: 'cutToLength', from: cut[0],
+      value: negated ? 'excluded' : 'cut-to-length stock only' });
+  } else if (/\b(ready[\s-]*made|finished|off[\s-]*the[\s-]*shelf)\b/.test(text)) {
+    fields.cutToLength = 'exclude';
+    read.push({ field: 'cutToLength', from: text.match(/\b(ready[\s-]*made|finished|off[\s-]*the[\s-]*shelf)\b/)[0],
+      value: 'excluded' });
+  }
+
   // --- what to optimise for -------------------------------------------
   for (const [key, re] of SORT_CUES) {
     const hit = text.match(re);
@@ -2732,6 +2780,7 @@ function findRequirements() {
     minRatedLoad_N: readForce('f-minload', 'f-force-u'),
     minTemperature_C: readTemp('f-mintemp', 'f-temp-u'),
     straightOnly: $('f-shape').value === 'straight',
+    cutToLength: $('f-cut').value || 'any',
     ends: $('f-ends').value ? [$('f-ends').value] : null,
     families: $('f-family').value ? [$('f-family').value] : null,
     positionTol_mm: readLen('f-postol') ?? sm.inToMm(0.010),
@@ -2880,7 +2929,8 @@ function runFind() {
 const OPTIONAL_NUMBERS = ['f-minod', 'f-maxod', 'f-minid', 'f-maxid', 'f-minwire', 'f-maxwire',
   'f-minfree', 'f-maxfree', 'f-maxinst', 'f-maxsolid', 'f-minrate', 'f-maxrate', 'f-minload',
   'f-mintravel', 'f-maxtravel', 'f-mintemp', 'f-postol', 'f-ratetol'];
-const OPTIONAL_SELECTS = { 'f-material': '', 'f-ends': '', 'f-shape': '', 'f-family': '', 'f-sort': 'robustness' };
+const OPTIONAL_SELECTS = { 'f-material': '', 'f-ends': '', 'f-shape': '', 'f-family': '',
+  'f-cut': '', 'f-sort': 'robustness' };
 
 /**
  * Inputs whose meaning depends on the length unit. With one diameter box the
@@ -2936,6 +2986,7 @@ const NL_LABELS = {
   minWireDia: 'min wire', maxWireDia: 'max wire',
   minRate: 'min rate', maxRate: 'max rate',
   material: 'material', ends: 'end type', sortBy: 'rank by',
+  cutToLength: 'cut-to-length',
 };
 
 function applyParse(res) {
@@ -2960,6 +3011,7 @@ function applyParse(res) {
   if (f.materialKey) $('f-material').value = f.materialKey;
   if (f.endsKey) $('f-ends').value = f.endsKey;
   if (f.sortBy) $('f-sort').value = f.sortBy;
+  if (f.cutToLength) $('f-cut').value = f.cutToLength === 'exclude' ? 'exclude' : 'only';
   // Show the filters it set, so nothing is applied out of sight.
   if (Object.keys(f).some((k) => k !== 'force_N' && k !== 'forceUnit' && k !== 'forceValue')) {
     $('f-more').open = true;
@@ -3342,6 +3394,8 @@ function springColumns(pick) {
         ? `<a href="${esc(p(r).url)}" target="_blank" rel="noopener">${esc(springName(p(r)))}</a>`
         : esc(springName(p(r)))) }),
     col({ key: 'family', label: 'family', kind: 'select', align: 'l', text: (r) => p(r).family || '' }),
+    col({ key: 'cut', label: 'cut to length', kind: 'select', align: 'l',
+      derivedKey: 'cutToLength', text: (r) => (p(r).cutToLength ? 'yes' : 'no') }),
     col({ key: 'material', label: 'material', kind: 'select', align: 'l',
       derivedKey: 'materialKey', text: (r) => p(r).material || '' }),
     col({ key: 'ends', label: 'ends', kind: 'select', align: 'l',
