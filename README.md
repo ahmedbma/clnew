@@ -94,6 +94,14 @@ To update it: print the vendor's filtered listing to PDF, run the extractor, and
 commit the result. To add springs by hand instead, paste them into the Catalogue
 tab, click **Download as JSON**, and commit that.
 
+The catalogue table carries every field, published and derived: family, material,
+ends, OD, ID, wire, free / solid / at-max-load lengths, usable travel, rate and
+its tolerance, the vendor's max load beside the max usable load, coil count,
+spring index, temperature rating, mil spec, colour, pack quantity and price.
+Every heading sorts, and the row beneath them filters — plain text matches what
+the cell shows, and number columns also take `>2`, `<=0.5`, `1..3`. Unknown values
+sort to the bottom in both directions rather than reading as zero.
+
 A spring carrying **notes** in the catalogue list has something worth knowing
 about it — a derived coil count too low for the rate equation to be reliable, a
 spring index outside 4–14, rectangular wire, cut-to-length stock, a material with

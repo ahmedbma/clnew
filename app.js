@@ -25,6 +25,8 @@ const state = {
   storeError: null,
   results: [],
   selected: null,
+  catSort: { key: null, dir: 'asc' },
+  catFilters: {},
 };
 
 /**
@@ -639,6 +641,8 @@ function setLengthUnit(next) {
   $('f-len-u').value = next;
   $('a-units').value = next;
   refreshUnitLabels();
+  // The catalogue's headings and every numeric cell are unit-dependent.
+  renderCatalogue();
 }
 
 function clearFilters() {
@@ -801,55 +805,172 @@ function renderCatalogue() {
   drawCatalogue();
 }
 
-function drawCatalogue() {
-  const box = $('c-list');
-  const shipped = state.catalogue.filter((x) => x._origin === 'shared').length;
-  const mine = state.catalogue.filter((x) => x._origin === 'local').length;
-
-  const warn = state.storeError
-    ? `<div class="callout bad"><p>${esc(state.storeError)}</p></div>` : '';
-  const hiddenNote = state.hidden.size
-    ? `<p class="hint">${state.hidden.size} shipped spring${state.hidden.size === 1 ? '' : 's'} hidden on this browser.</p>` : '';
-
-  if (!state.catalogue.length) {
-    box.innerHTML = `<h2>Loaded springs</h2>${warn}
-      <p class="muted">Nothing loaded yet. Paste a vendor table above, or open a saved .json file.</p>${hiddenNote}`;
-    return;
-  }
-
-  const rows = state.catalogue.map((s) => `<tr>
-    <td class="l">${s._origin === 'shared' ? badge('ok', 'shipped') : badge('warn', 'yours')}</td>
-    <td class="l">${esc(springName(s))}</td>
-    <td class="l muted">${esc(s.vendor || '')}</td>
-    <td class="num">${Lnum(s.od_mm)}</td>
-    <td class="num">${Lnum(s.wireDia_mm)}</td>
-    <td class="num">${Lnum(s.freeLength_mm)}</td>
-    <td class="num">${nf(sm.nPerMmToLbfPerIn(s.rate_Npmm), 2)}</td>
-    <td class="num">${Lnum(s.solidLength_mm)}</td>
-    <td class="num">${F(s.maxUsableForce_N)}</td>
-    <td class="l">${s.incomplete
+/* ------------------------------------------------- the catalogue table
+ * Every field the vendor publishes or the engine works out, one column
+ * each, all sortable and all filterable. The header and filter row are
+ * built once and only the tbody is redrawn, so typing in a filter never
+ * loses focus.
+ */
+const CAT_COLUMNS = [
+  { key: 'source', label: 'source', kind: 'select', align: 'l',
+    text: (s) => (s._origin === 'shared' ? 'shipped' : 'yours'),
+    html: (s) => (s._origin === 'shared' ? badge('ok', 'shipped') : badge('warn', 'yours')) },
+  { key: 'part', label: 'part', kind: 'text', align: 'l',
+    text: (s) => springName(s),
+    html: (s) => (s.url
+      ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(springName(s))}</a>`
+      : esc(springName(s))) },
+  { key: 'family', label: 'family', kind: 'select', align: 'l', text: (s) => s.family || '' },
+  { key: 'material', label: 'material', kind: 'select', align: 'l', text: (s) => s.material || '' },
+  { key: 'ends', label: 'ends', kind: 'select', align: 'l',
+    text: (s) => s.ends || (s.endsKey ? sm.getEnds(s.endsKey).name : '') },
+  { key: 'od', label: 'OD', unit: 'length', kind: 'num', num: (s) => s.od_mm },
+  { key: 'id', label: 'ID', unit: 'length', kind: 'num', num: (s) => s.id_mm },
+  { key: 'wire', label: 'wire', unit: 'length', kind: 'num', num: (s) => s.wireDia_mm },
+  { key: 'free', label: 'free lg', unit: 'length', kind: 'num', num: (s) => s.freeLength_mm },
+  { key: 'solid', label: 'solid lg', unit: 'length', kind: 'num', num: (s) => s.solidLength_mm },
+  { key: 'atload', label: 'lg at max load', unit: 'length', kind: 'num', num: (s) => s.lengthAtMaxLoad_mm },
+  { key: 'travel', label: 'usable travel', unit: 'length', kind: 'num', num: (s) => s.usableTravel_mm },
+  { key: 'rate', label: 'rate', unit: 'rate', kind: 'num', num: (s) => s.rate_Npmm },
+  { key: 'ratetol', label: 'rate tol', kind: 'num', dp: 1,
+    num: (s) => (s.rateTol == null ? null : s.rateTol * 100), suffix: '%' },
+  { key: 'maxload', label: 'vendor max load', unit: 'force', kind: 'num', num: (s) => s.maxLoad_N },
+  { key: 'maxusable', label: 'max usable load', unit: 'force', kind: 'num', num: (s) => s.maxUsableForce_N },
+  { key: 'coils', label: 'total coils', kind: 'num', dp: 1, num: (s) => s.totalCoils },
+  { key: 'index', label: 'index C', kind: 'num', dp: 1, num: (s) => s.springIndex },
+  { key: 'temp', label: 'max temp', unit: 'temp', kind: 'num', num: (s) => s.maxTemp_C },
+  { key: 'milspec', label: 'mil spec', kind: 'text', align: 'l', text: (s) => s.milSpec || '' },
+  { key: 'colour', label: 'colour', kind: 'select', align: 'l', text: (s) => s.colour || '' },
+  { key: 'pkg', label: 'pkg qty', kind: 'num', dp: 0, num: (s) => s.pkgQty },
+  { key: 'price', label: 'price/pkg', kind: 'num', dp: 2,
+    num: (s) => (s.price == null ? null : parseFloat(String(s.price).replace(/[^0-9.]/g, ''))) },
+  { key: 'notes', label: 'notes', kind: 'num', dp: 0, align: 'l',
+    num: (s) => s.warnings.length,
+    html: (s) => (s.incomplete
       ? badge('bad', 'incomplete')
       : s.warnings.length
         ? `<button class="pill warn as-button" data-notes="${esc(springKey(s))}"
              aria-expanded="false">${s.warnings.length} note${s.warnings.length === 1 ? '' : 's'}</button>`
-        : ''}</td>
+        : '') },
+];
+
+/** A numeric column's value in the units the table is currently showing. */
+function colValue(col, spring) {
+  if (col.kind !== 'num') return null;
+  const raw = col.num(spring);
+  if (raw == null || !Number.isFinite(raw)) return null;
+  if (col.unit === 'length') return state.lengthUnit === 'in' ? sm.mmToIn(raw) : raw;
+  if (col.unit === 'rate') return state.lengthUnit === 'in' ? sm.nPerMmToLbfPerIn(raw) : raw;
+  return raw;
+}
+function colDecimals(col) {
+  if (col.dp != null) return col.dp;
+  if (col.unit === 'length') return state.lengthUnit === 'in' ? 3 : 2;
+  if (col.unit === 'rate') return state.lengthUnit === 'in' ? 2 : 4;
+  if (col.unit === 'force') return 3;
+  if (col.unit === 'temp') return 0;
+  return 2;
+}
+function colUnitLabel(col) {
+  if (col.unit === 'length') return Lunit();
+  if (col.unit === 'rate') return state.lengthUnit === 'in' ? 'lbf/in' : 'N/mm';
+  if (col.unit === 'force') return 'N';
+  if (col.unit === 'temp') return '°C';
+  return '';
+}
+/** What the cell reads as, which is also what a plain-text filter matches. */
+function colText(col, spring) {
+  if (col.kind !== 'num') return col.text(spring);
+  const v = colValue(col, spring);
+  return v == null ? '' : nf(v, colDecimals(col)) + (col.suffix || '');
+}
+
+/**
+ * Filters take plain text anywhere, and comparisons on numeric columns:
+ * ">2", "<=0.5", "1..3", "1-3". Anything else is a substring match on what
+ * the cell actually shows, which is the behaviour people expect.
+ */
+function makeFilter(col, expr) {
+  const t = String(expr || '').trim();
+  if (!t) return null;
+  if (col.kind === 'select') return (s) => colText(col, s) === t;
+  if (col.kind === 'num') {
+    let m = t.match(/^(>=|<=|>|<|=)\s*(-?[\d.]+)$/);
+    if (m) {
+      const v = parseFloat(m[2]);
+      const ops = { '>': (x) => x > v, '<': (x) => x < v, '>=': (x) => x >= v, '<=': (x) => x <= v, '=': (x) => x === v };
+      return (s) => { const x = colValue(col, s); return x != null && ops[m[1]](x); };
+    }
+    m = t.match(/^(-?[\d.]+)\s*(?:\.\.|-|to)\s*(-?[\d.]+)$/);
+    if (m) {
+      const a = Math.min(parseFloat(m[1]), parseFloat(m[2]));
+      const b = Math.max(parseFloat(m[1]), parseFloat(m[2]));
+      return (s) => { const x = colValue(col, s); return x != null && x >= a && x <= b; };
+    }
+  }
+  const needle = t.toLowerCase();
+  return (s) => colText(col, s).toLowerCase().includes(needle);
+}
+
+function filteredCatalogue() {
+  const active = CAT_COLUMNS
+    .map((col) => [col, makeFilter(col, state.catFilters[col.key])])
+    .filter(([, f]) => f);
+  let list = active.length
+    ? state.catalogue.filter((s) => active.every(([, f]) => f(s)))
+    : state.catalogue.slice();
+
+  const sort = state.catSort;
+  if (sort.key) {
+    const col = CAT_COLUMNS.find((c) => c.key === sort.key);
+    const dir = sort.dir === 'desc' ? -1 : 1;
+    list.sort((a, b) => {
+      if (col.kind === 'num') {
+        const x = colValue(col, a);
+        const y = colValue(col, b);
+        // A blank is never "smallest" -- unknowns sort to the bottom either way.
+        if (x == null && y == null) return 0;
+        if (x == null) return 1;
+        if (y == null) return -1;
+        return (x - y) * dir;
+      }
+      return colText(col, a).localeCompare(colText(col, b), undefined, { numeric: true }) * dir;
+    });
+  }
+  return list;
+}
+
+function catalogueRowsHtml(list) {
+  const span = CAT_COLUMNS.length + 1;
+  return list.map((s) => `<tr>
+    ${CAT_COLUMNS.map((col) => `<td class="${col.align === 'l' || col.kind !== 'num' ? 'l' : 'num'}">${
+      col.html ? col.html(s) : esc(colText(col, s))}</td>`).join('')}
     <td class="l"><button class="link" data-del="${esc(springKey(s))}" data-origin="${s._origin}">remove</button></td>
   </tr>
   ${s.warnings.length ? `<tr class="notes-row" data-for="${esc(springKey(s))}" hidden>
-    <td class="l" colspan="11"><ul class="notes">${s.warnings.map((w) => `<li>${esc(w)}</li>`).join('')}</ul></td>
+    <td class="l" colspan="${span}"><ul class="notes">${s.warnings.map((w) => `<li>${esc(w)}</li>`).join('')}</ul></td>
   </tr>` : ''}`).join('');
+}
 
-  box.innerHTML = `<h2>Loaded springs (${state.catalogue.length})</h2>${warn}
-    <p class="hint" style="margin-top:-6px">${shipped} shipped with the site &mdash; everyone who opens
-      it sees these. ${mine} added on this browser only.
-      ${state.catalogue.filter((x) => x.warnings.length).length} carry notes &mdash; things worth knowing
-      about a spring, not faults. Click a note badge to read them.</p>
-    <div class="scroll"><table>
-      <thead><tr><th class="l">source</th><th class="l">part</th><th class="l">vendor</th>
-        <th>OD ${Lunit()}</th><th>wire ${Lunit()}</th><th>free ${Lunit()}</th><th>rate lbf/in</th>
-        <th>solid ${Lunit()}</th><th>max load</th><th class="l">notes</th><th class="l"></th></tr></thead>
-      <tbody>${rows}</tbody></table></div>${hiddenNote}`;
+/** Redraw only the rows, so filter inputs keep focus and their caret. */
+function refreshCatalogueRows() {
+  const body = $('c-rows');
+  if (!body) return;
+  const list = filteredCatalogue();
+  body.innerHTML = catalogueRowsHtml(list);
+  $('c-count').textContent = list.length === state.catalogue.length
+    ? `all ${state.catalogue.length}`
+    : `${list.length} of ${state.catalogue.length}`;
+  CAT_COLUMNS.forEach((col) => {
+    const th = document.querySelector(`th[data-col="${col.key}"]`);
+    if (th) th.setAttribute('aria-sort',
+      state.catSort.key === col.key ? (state.catSort.dir === 'desc' ? 'descending' : 'ascending') : 'none');
+  });
+  wireRowButtons();
+}
 
+function wireRowButtons() {
+  const box = $('c-list');
   box.querySelectorAll('[data-notes]').forEach((b) => b.addEventListener('click', () => {
     const target = box.querySelector(`.notes-row[data-for="${CSS.escape(b.dataset.notes)}"]`);
     if (!target) return;
@@ -865,54 +986,76 @@ function drawCatalogue() {
   }));
 }
 
-/**
- * Show exactly what the paste was understood to mean. Pasting data into a
- * calculator is an act of trust; this is the receipt.
- */
-function renderImportReview(res, added) {
-  const status = $('c-status');
-  const bits = [];
+function drawCatalogue() {
+  const box = $('c-list');
+  const shipped = state.catalogue.filter((x) => x._origin === 'shared').length;
+  const mine = state.catalogue.filter((x) => x._origin === 'local').length;
+  const warn = state.storeError ? `<div class="callout bad"><p>${esc(state.storeError)}</p></div>` : '';
+  const hiddenNote = state.hidden.size
+    ? `<p class="hint">${state.hidden.size} shipped spring${state.hidden.size === 1 ? '' : 's'} hidden on this browser.</p>` : '';
 
-  if (res.format === 'spec-sheet') {
-    const blocks = res.blocks;
-    const good = blocks.filter((b) => !b.rejected);
-    bits.push(`<div class="callout ${good.length ? '' : 'bad'}">
-      <p>Read as ${blocks.length === 1 ? 'a product spec sheet' : `${blocks.length} product spec sheets`}
-        &mdash; the label-and-value kind from a vendor product page, not a table.
-        ${good.length ? `<strong>${good.length} spring${good.length === 1 ? '' : 's'} added.</strong>` : 'Nothing added.'}</p>
-      ${res.rejected.map((r) => `<p>${esc(r.rejected)}</p>`).join('')}
-    </div>`);
-
-    for (const b of good) {
-      const s = b.spring;
-      const derived = (s.derived || []).filter((d) => !d.endsWith('Key'));
-      bits.push(`<h3>${esc(springName(s))}${s.partNumber ? '' : ' <span class="derived">named from its dimensions &mdash; the page gave no part number</span>'}</h3>
-        <div class="scroll"><table>
-          <thead><tr><th class="l">on the page</th><th class="l">value</th><th class="l">used as</th></tr></thead>
-          <tbody>${b.read.map((r) => `<tr>
-            <td class="l">${esc(r.label)}</td>
-            <td class="l num">${esc(r.value)}</td>
-            <td class="l muted">${esc(r.field)}${r.note ? ` &mdash; ${esc(r.note)}` : ''}</td>
-          </tr>`).join('')}</tbody>
-        </table></div>
-        ${derived.length ? `<p class="hint">Worked out from those: ${derived.map((d) => `<code>${esc(d)}</code>`).join(' ')}</p>` : ''}
-        ${b.ignored.length ? `<p class="hint">Ignored, not spring data: ${b.ignored.map(esc).join(', ')}</p>` : ''}
-        ${s.warnings.length ? `<ul class="notes">${s.warnings.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}`);
-    }
-    status.innerHTML = bits.join('');
+  if (!state.catalogue.length) {
+    box.innerHTML = `<h2>Loaded springs</h2>${warn}
+      <p class="muted">Nothing loaded yet. Paste a vendor table above, or open a saved .json file.</p>${hiddenNote}`;
     return;
   }
 
-  const mapped = res.mapping.filter((m) => m.field);
-  const usable = added.filter((s) => !s.incomplete);
-  status.innerHTML = `<div class="callout ${usable.length ? '' : 'warn'}">
-    <p>Read as a catalogue table. Parsed <strong>${res.rows.length}</strong> rows &rarr;
-      <strong>${usable.length}</strong> usable
-      ${added.length - usable.length ? `, ${added.length - usable.length} short of data` : ''}
-      ${res.skipped.length ? `, ${res.skipped.length} lines ignored` : ''}.</p>
-    <p class="muted" style="font-size:12px">Columns read: ${mapped.map((m) => `${esc(m.header)} &rarr; ${m.field}`).join(', ') || 'none'}
-      ${res.unmapped.length ? `<br>Ignored: ${res.unmapped.map((m) => esc(m.header)).join(', ')}` : ''}</p>
-  </div>`;
+  // Options for the categorical filters come from what is actually loaded.
+  const options = {};
+  CAT_COLUMNS.filter((c) => c.kind === 'select').forEach((col) => {
+    options[col.key] = [...new Set(state.catalogue.map((s) => colText(col, s)).filter(Boolean))].sort();
+  });
+
+  const heads = CAT_COLUMNS.map((col) => {
+    const unit = colUnitLabel(col);
+    return `<th class="${col.align === 'l' || col.kind !== 'num' ? 'l' : ''}" data-col="${col.key}" aria-sort="none">
+      <button class="sortable" data-sort="${col.key}">${esc(col.label)}${unit ? ` <span class="u">${esc(unit)}</span>` : ''}<span class="caret"></span></button>
+    </th>`;
+  }).join('');
+
+  const filters = CAT_COLUMNS.map((col) => {
+    const v = esc(state.catFilters[col.key] || '');
+    if (col.kind === 'select') {
+      return `<th class="l"><select data-filter="${col.key}"><option value="">any</option>${
+        options[col.key].map((o) => `<option${o === state.catFilters[col.key] ? ' selected' : ''}>${esc(o)}</option>`).join('')
+      }</select></th>`;
+    }
+    return `<th class="l"><input data-filter="${col.key}" value="${v}"
+      placeholder="${col.kind === 'num' ? '>2, 1..3' : 'contains'}"></th>`;
+  }).join('');
+
+  box.innerHTML = `<h2>Loaded springs (${state.catalogue.length})</h2>${warn}
+    <p class="hint" style="margin-top:-6px">${shipped} shipped with the site &mdash; everyone who opens
+      it sees these. ${mine} added on this browser only.
+      ${state.catalogue.filter((x) => x.warnings.length).length} carry notes &mdash; things worth knowing
+      about a spring, not faults. Click a note badge to read them.</p>
+    <p class="hint">Click any heading to sort. The row under the headings filters:
+      type text to match, or a comparison on a number column &mdash;
+      <code>&gt;2</code>, <code>&lt;=0.5</code>, <code>1..3</code>.
+      Showing <strong id="c-count">all ${state.catalogue.length}</strong>.
+      <button class="link" id="c-clearfilters">clear table filters</button></p>
+    <div class="scroll cat-scroll"><table class="cat">
+      <thead><tr>${heads}<th class="l"></th></tr>
+        <tr class="filters">${filters}<th class="l"></th></tr></thead>
+      <tbody id="c-rows"></tbody></table></div>${hiddenNote}`;
+
+  box.querySelectorAll('[data-sort]').forEach((b) => b.addEventListener('click', () => {
+    const key = b.dataset.sort;
+    state.catSort = state.catSort.key === key
+      ? { key, dir: state.catSort.dir === 'asc' ? 'desc' : 'asc' }
+      : { key, dir: 'asc' };
+    refreshCatalogueRows();
+  }));
+  box.querySelectorAll('[data-filter]').forEach((el) => {
+    const run = () => { state.catFilters[el.dataset.filter] = el.value; refreshCatalogueRows(); };
+    el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', run);
+  });
+  $('c-clearfilters').addEventListener('click', () => {
+    state.catFilters = {};
+    box.querySelectorAll('[data-filter]').forEach((el) => { el.value = ''; });
+    refreshCatalogueRows();
+  });
+  refreshCatalogueRows();
 }
 
 function importText(text, { vendor, us }) {

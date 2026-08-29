@@ -145,6 +145,22 @@ tr.rejected{color:var(--muted)}
 .pill.bad{background:var(--bad-soft);color:var(--bad)}
 button.pill.as-button{border:1px solid transparent;cursor:pointer;font-family:var(--cond)}
 button.pill.as-button:hover{border-color:currentColor}
+/* the catalogue's own sortable, filterable table */
+table.cat th{vertical-align:bottom;padding-bottom:5px}
+table.cat thead tr:first-child th{top:0;z-index:3}
+table.cat thead tr.filters th{position:sticky;top:31px;z-index:2;background:var(--panel);
+  padding:3px 6px 6px;border-bottom:1px solid var(--line)}
+table.cat thead tr.filters input,table.cat thead tr.filters select{
+  padding:3px 6px;font:11px/1.4 var(--mono);min-width:72px;width:100%}
+table.cat thead tr.filters select{font-family:var(--sans)}
+button.sortable{background:none;border:none;padding:0;cursor:pointer;color:inherit;font:inherit;
+  display:inline-flex;align-items:baseline;gap:4px;white-space:nowrap}
+button.sortable:hover{color:var(--ink)}
+th[aria-sort="ascending"] button.sortable,th[aria-sort="descending"] button.sortable{color:var(--accent)}
+.caret{width:0;height:0;border-left:3.5px solid transparent;border-right:3.5px solid transparent;opacity:0}
+th[aria-sort="ascending"] .caret{opacity:1;border-bottom:5px solid currentColor}
+th[aria-sort="descending"] .caret{opacity:1;border-top:5px solid currentColor}
+.cat-scroll{max-height:78vh;overflow:auto}
 tr.notes-row td{background:var(--bg)}
 tr.notes-row ul.notes{margin:2px 0;white-space:normal;max-width:96ch}
 .derived{color:var(--muted);font:400 11px/1.4 var(--sans)}
@@ -386,11 +402,10 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
         page. Copy the whole thing, boilerplate and all; the compliance and country-of-origin lines get
         dropped. A missing part number is fine &mdash; the spring gets named from its dimensions.</li>
     </ul>
-    <p class="hint" style="margin-top:-8px">Nothing ships with the tool &mdash; the catalogue starts empty
-      so no invented part number can ever be mistaken for a real one.
-      Springs you paste are saved in <strong>this browser</strong> and
-      stay until you clear them. To make a list everyone sees on their first visit, in any browser:
-      <strong>Download as JSON</strong> and commit the file over
+    <p class="hint">1,566 McMaster-Carr straight compression springs ship with the tool and load for
+      everyone. Anything you paste here is <strong>yours alone</strong>, saved in this browser, layered
+      on top of them, and marked <em>yours</em> in the table below. To put springs in the shared list
+      instead: <strong>Download as JSON</strong> and commit the file over
       <code>data/catalogue.json</code> in the repository.</p>
     <textarea id="c-paste" placeholder="Either a table...
 
