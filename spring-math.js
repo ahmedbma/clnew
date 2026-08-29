@@ -385,7 +385,17 @@ export function normalizeSpring(raw) {
       + 'cutting it shortens the coil count and stiffens the spring in proportion.');
   }
   if (rectangularWire) {
-    warnings.push('Rectangular wire, so coil count, solid length and stress are not worked out. Force at length comes straight from the published rate.');
+    // Say what the section actually is: these are square, rectangular or
+    // moulded, and "wire" is simply wrong for a moulded spring.
+    const w = num(s.wireWidth_mm);
+    const t = num(s.wireThickness_mm);
+    const square = w != null && t != null && Math.abs(w - t) < 1e-9;
+    const moulded = s.materialKey == null || /plastic|pei|nylon|acetal|peek/i.test(s.material || '');
+    const shape = moulded
+      ? `Moulded ${square ? 'square' : 'rectangular'} section rather than wound wire`
+      : `${square ? 'Square' : 'Rectangular'}-section wire, not round`;
+    warnings.push(`${shape}, so coil count, solid length and stress are not worked out - `
+      + 'those all assume a round wire. Force at length comes straight from the published rate and is unaffected.');
   }
 
   if (od != null && d != null) {

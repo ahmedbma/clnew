@@ -172,9 +172,36 @@ test('what a spring cannot do without is the rate and the free length', () => {
   assert.equal(rect.activeCoils, null);
   assert.equal(rect.solidLength_mm, null);
   close(rect.usableTravel_mm, 7);
-  assert.ok(rect.warnings.some((w) => /Rectangular wire/.test(w)));
+  assert.ok(rect.warnings.some((w) => /Square-section wire, not round/.test(w)));
   // Force at length still comes straight off the published rate.
   close(sm.evaluate(rect, { targetForce_N: 4 }).working.installedLength_mm, 23);
+});
+
+test('a non-round section is named for what it actually is', () => {
+  // "Rectangular" was being said of three different things. Square wire,
+  // genuinely rectangular wire and a moulded plastic spring are not the
+  // same object, and the warning should not pretend otherwise.
+  const warn = (s) => sm.normalizeSpring(s).warnings.join(' | ');
+  const base = { od_mm: 10, id_mm: 7, freeLength_mm: 25, rate_Npmm: 2 };
+
+  const square = warn({ ...base, wireWidth_mm: 1.5, wireThickness_mm: 1.5, material: 'Music Wire' });
+  assert.match(square, /Square-section wire, not round/);
+
+  const oblong = warn({ ...base, wireWidth_mm: 1.5, wireThickness_mm: 0.9, material: 'Music Wire' });
+  assert.match(oblong, /Rectangular-section wire, not round/);
+
+  // Ultem PEI has no spring properties in the table, and is moulded rather
+  // than wound, so calling any of it "wire" is simply wrong.
+  const moulded = warn({ ...base, wireWidth_mm: 1.5, wireThickness_mm: 0.9, material: 'Ultem PEI' });
+  assert.match(moulded, /Moulded rectangular section rather than wound wire/);
+  assert.doesNotMatch(moulded, /wire, not round/);
+
+  // Whatever the section, the same consequence is spelled out: the derived
+  // columns are skipped, the published rate is not affected.
+  for (const w of [square, oblong, moulded]) {
+    assert.match(w, /coil count, solid length and stress are not worked out/);
+    assert.match(w, /straight from the published rate/);
+  }
 });
 
 test('an unrecognised material is left unknown, an unstated one is assumed', () => {
