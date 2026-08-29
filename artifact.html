@@ -976,6 +976,20 @@ function normalizeSpring(raw) {
     s.maxDeflection_mm = vendorMaxDefl;
     derived.push('maxDeflection_mm');
   }
+  // A published compressed length below the spring's own solid height is an
+  // impossibility, not a disagreement. The solid height here is usually
+  // derived by inverting the published rate, so it inherits that rate's
+  // rounding -- a few percent means nothing. Ten percent does.
+  if (atMaxLoad != null && Ls != null && atMaxLoad < Ls * 0.9) {
+    const gap = ((Ls - atMaxLoad) / Ls * 100).toFixed(0);
+    const approx = derived.includes('solidLength_mm')
+      && (getMaterial(s.materialKey).sut || []).some((b) => b.approx);
+    warnings.push(`Published compressed length is ${gap}% shorter than the coils stacked solid, which `
+      + `cannot happen. ${approx
+        ? `Solid height here is worked back from the published rate using approximate properties for `
+          + `${getMaterial(s.materialKey).name}, so this may be the estimate rather than the listing.`
+        : 'One of the published figures for this spring is wrong.'}`);
+  }
   // Cross-check the vendor against itself: rate x travel should be max load.
   if (vendorMaxDefl != null && vendorMaxLoad != null) {
     const implied = k * vendorMaxDefl;
