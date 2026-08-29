@@ -139,6 +139,10 @@ tr.rejected{color:var(--muted)}
 .pill.ok{background:var(--ok-soft);color:var(--ok)}
 .pill.warn{background:var(--warn-soft);color:var(--warn)}
 .pill.bad{background:var(--bad-soft);color:var(--bad)}
+button.pill.as-button{border:1px solid transparent;cursor:pointer;font-family:var(--cond)}
+button.pill.as-button:hover{border-color:currentColor}
+tr.notes-row td{background:var(--bg)}
+tr.notes-row ul.notes{margin:2px 0;white-space:normal;max-width:96ch}
 .derived{color:var(--muted);font:400 11px/1.4 var(--sans)}
 
 /* spec readout */
@@ -3050,22 +3054,38 @@ function renderCatalogue() {
     <td class="num">${nf(sm.nPerMmToLbfPerIn(s.rate_Npmm), 2)}</td>
     <td class="num">${Lnum(s.solidLength_mm)}</td>
     <td class="num">${F(s.maxUsableForce_N)}</td>
-    <td class="l">${s.incomplete ? badge('bad', 'incomplete') : s.warnings.length ? badge('warn', String(s.warnings.length)) : ''}</td>
+    <td class="l">${s.incomplete
+      ? badge('bad', 'incomplete')
+      : s.warnings.length
+        ? `<button class="pill warn as-button" data-notes="${esc(springKey(s))}"
+             aria-expanded="false">${s.warnings.length} note${s.warnings.length === 1 ? '' : 's'}</button>`
+        : ''}</td>
     <td class="l"><button class="link" data-del="${esc(springKey(s))}" data-origin="${s._origin}">remove</button></td>
-  </tr>`).join('');
+  </tr>
+  ${s.warnings.length ? `<tr class="notes-row" data-for="${esc(springKey(s))}" hidden>
+    <td class="l" colspan="11"><ul class="notes">${s.warnings.map((w) => `<li>${esc(w)}</li>`).join('')}</ul></td>
+  </tr>` : ''}`).join('');
 
   box.innerHTML = `<h2>Loaded springs (${state.catalogue.length})</h2>${warn}
     <p class="hint" style="margin-top:-6px">${shipped} shipped with the site &mdash; everyone who opens
-      it sees these. ${mine} added on this browser only.</p>
+      it sees these. ${mine} added on this browser only.
+      ${state.catalogue.filter((x) => x.warnings.length).length} carry notes &mdash; things worth knowing
+      about a spring, not faults. Click a note badge to read them.</p>
     <div class="scroll"><table>
       <thead><tr><th class="l">source</th><th class="l">part</th><th class="l">vendor</th>
         <th>OD ${Lunit()}</th><th>wire ${Lunit()}</th><th>free ${Lunit()}</th><th>rate lbf/in</th>
-        <th>solid ${Lunit()}</th><th>max load</th><th class="l"></th><th class="l"></th></tr></thead>
+        <th>solid ${Lunit()}</th><th>max load</th><th class="l">notes</th><th class="l"></th></tr></thead>
       <tbody>${rows}</tbody></table></div>
     ${state.catalogue.length > shownRows.length
       ? `<p class="hint">Listing the first ${shownRows.length}. All ${state.catalogue.length} are searched
          &mdash; this table is just a window on them.</p>` : ''}${hiddenNote}`;
 
+  box.querySelectorAll('[data-notes]').forEach((b) => b.addEventListener('click', () => {
+    const target = box.querySelector(`.notes-row[data-for="${CSS.escape(b.dataset.notes)}"]`);
+    if (!target) return;
+    target.hidden = !target.hidden;
+    b.setAttribute('aria-expanded', String(!target.hidden));
+  }));
   box.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => {
     const key = b.dataset.del;
     // A shipped spring is not ours to delete -- hide it for this browser only.

@@ -94,6 +94,12 @@ To update it: print the vendor's filtered listing to PDF, run the extractor, and
 commit the result. To add springs by hand instead, paste them into the Catalogue
 tab, click **Download as JSON**, and commit that.
 
+A spring carrying **notes** in the catalogue list has something worth knowing
+about it — a derived coil count too low for the rate equation to be reliable, a
+spring index outside 4–14, rectangular wire, cut-to-length stock, a material with
+no published properties. They are observations, not faults, and the badge opens
+to read them.
+
 Springs a visitor pastes for themselves stay in their own browser and layer on top
 of the shared list, marked `yours` against the shared rows' `shipped`. They can
 hide a shipped spring locally without affecting anyone else, and restore it again.
