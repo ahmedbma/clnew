@@ -373,7 +373,9 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
         page. Copy the whole thing, boilerplate and all; the compliance and country-of-origin lines get
         dropped. A missing part number is fine &mdash; the spring gets named from its dimensions.</li>
     </ul>
-    <p class="hint" style="margin-top:-8px">Springs you paste are saved in <strong>this browser</strong> and
+    <p class="hint" style="margin-top:-8px">Nothing ships with the tool &mdash; the catalogue starts empty
+      so no invented part number can ever be mistaken for a real one.
+      Springs you paste are saved in <strong>this browser</strong> and
       stay until you clear them. To make a list everyone sees on their first visit, in any browser:
       <strong>Download as JSON</strong> and commit the file over
       <code>data/catalogue.json</code> in the repository.</p>
@@ -403,7 +405,6 @@ End Type&#9;Closed"></textarea>
     </div>
     <div class="row">
       <button class="go" id="c-import">Parse and load</button>
-      <button class="alt" id="c-example">Load example catalogue</button>
       <button class="alt" id="c-file">Open a .json / .csv file</button>
       <button class="alt" id="c-download">Download as JSON</button>
       <button class="alt" id="c-restore" hidden>Restore hidden springs</button>
@@ -473,8 +474,7 @@ End Type&#9;Closed"></textarea>
 </section>
 
 </div>
-<script>window.EXAMPLE_CATALOGUE = {"version":1,"generated":"2026-08-23T00:11:04.034Z","units":"SI (mm, N, N/mm)","vendor":"EXAMPLE - synthetic, not real parts","warning":"These are NOT real vendor part numbers. Geometrically consistent demo data only. Do not order from this file.","springs":[{"partNumber":"EX-01","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"Music Wire","materialKey":"music-wire","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":4.571999999999999,"wireDia_mm":0.4064,"freeLength_mm":12.7,"rate_Npmm":0.24868010604999644,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-02","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"Music Wire","materialKey":"music-wire","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":4.571999999999999,"wireDia_mm":0.508,"freeLength_mm":19.049999999999997,"rate_Npmm":0.5183754323295701,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-03","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"Music Wire","materialKey":"music-wire","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":6.095999999999999,"wireDia_mm":0.45719999999999994,"freeLength_mm":12.7,"rate_Npmm":0.18563444536126497,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-04","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"302 Stainless Steel","materialKey":"stainless-302","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":6.095999999999999,"wireDia_mm":0.5588,"freeLength_mm":19.049999999999997,"rate_Npmm":0.2907105465091508,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-05","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"Music Wire","materialKey":"music-wire","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":6.095999999999999,"wireDia_mm":0.6604,"freeLength_mm":25.4,"rate_Npmm":0.6181977284200616,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-06","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"Music Wire","materialKey":"music-wire","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":7.619999999999999,"wireDia_mm":0.508,"freeLength_mm":15.875,"rate_Npmm":0.12258878467253345,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-07","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"302 Stainless Steel","materialKey":"stainless-302","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":7.619999999999999,"wireDia_mm":0.6096,"freeLength_mm":22.224999999999998,"rate_Npmm":0.19263951877112404,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-08","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"Music Wire","materialKey":"music-wire","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":7.619999999999999,"wireDia_mm":0.7619999999999999,"freeLength_mm":31.75,"rate_Npmm":0.49385767539506337,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-09","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"Music Wire","materialKey":"music-wire","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":9.143999999999998,"wireDia_mm":0.5588,"freeLength_mm":15.875,"rate_Npmm":0.10857863785281535,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-10","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"Music Wire","materialKey":"music-wire","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":9.143999999999998,"wireDia_mm":0.6604,"freeLength_mm":22.224999999999998,"rate_Npmm":0.18213190865633544,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-11","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"302 Stainless Steel","materialKey":"stainless-302","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":9.143999999999998,"wireDia_mm":0.8128,"freeLength_mm":25.4,"rate_Npmm":0.4343145514112614,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-12","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"Music Wire","materialKey":"music-wire","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":9.143999999999998,"wireDia_mm":0.9652,"freeLength_mm":38.099999999999994,"rate_Npmm":0.7863194902566789,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-13","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"Music Wire","materialKey":"music-wire","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":10.668,"wireDia_mm":0.6604,"freeLength_mm":19.049999999999997,"rate_Npmm":0.1348476631397868,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-14","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"302 Stainless Steel","materialKey":"stainless-302","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":10.668,"wireDia_mm":0.8128,"freeLength_mm":25.4,"rate_Npmm":0.2626902528697146,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-15","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"Music Wire","materialKey":"music-wire","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":10.668,"wireDia_mm":1.0413999999999999,"freeLength_mm":38.099999999999994,"rate_Npmm":0.726776366272877,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-16","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"Music Wire","materialKey":"music-wire","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":12.7,"wireDia_mm":0.889,"freeLength_mm":25.4,"rate_Npmm":0.26794405792710885,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-17","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"302 Stainless Steel","materialKey":"stainless-302","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":12.7,"wireDia_mm":1.0413999999999999,"freeLength_mm":31.75,"rate_Npmm":0.42730947800140234,"source":"generated example data","provenance":"vendor-table-import"},{"partNumber":"EX-18","vendor":"EXAMPLE - synthetic, not real parts","type":"compression","material":"Music Wire","materialKey":"music-wire","ends":"Closed & Ground","endsKey":"closed-and-ground","od_mm":12.7,"wireDia_mm":1.2192,"freeLength_mm":44.449999999999996,"rate_Npmm":0.8038321737813265,"source":"generated example data","provenance":"vendor-table-import"}]};
-window.SHARED_CATALOGUE = {"version":1,"name":"Shared catalogue","updated":null,"units":"SI (mm, N, N/mm)","note":"Springs listed here load automatically for everyone who opens the site, in any browser, on their first visit -- no pasting needed. This is the curated list. To add to it: paste a vendor table into the Catalogue tab, click Download as JSON, and commit the result over this file. Starts empty because no verified vendor data has been added yet.","springs":[]};</script>
+<script>window.SHARED_CATALOGUE = {"version":1,"name":"Shared catalogue","updated":null,"units":"SI (mm, N, N/mm)","note":"Springs listed here load automatically for everyone who opens the site, in any browser, on their first visit -- no pasting needed. This is the curated list. To add to it: paste a vendor table into the Catalogue tab, click Download as JSON, and commit the result over this file. Starts empty because no verified vendor data has been added yet.","springs":[]};</script>
 <script type="module">
 const sm = (() => {
 
@@ -2189,6 +2189,9 @@ return { parseQuery, describeParse };
 
 const $ = (id) => document.getElementById(id);
 const STORE_KEY = 'springcalc.catalog.v1';
+// Bumping this clears every browser's stored springs once, on next load.
+// Used to wipe the synthetic demo data the tool used to ship with.
+const RESET_TOKEN = '2026-08-27-clean-slate';
 
 const state = {
   lengthUnit: 'in',
@@ -2278,6 +2281,11 @@ function loadStore() {
     const raw = localStorage.getItem(STORE_KEY);
     if (!raw) return;
     const data = JSON.parse(raw);
+    if (data.resetToken !== RESET_TOKEN) {
+      // Everything stored before this token was demo data; start clean.
+      localStorage.removeItem(STORE_KEY);
+      return;
+    }
     state.local = cat.fromCatalogJson(data);
     state.hidden = new Set(Array.isArray(data.hidden) ? data.hidden : []);
   } catch (e) {
@@ -2295,6 +2303,7 @@ function saveStore() {
   try {
     const payload = cat.toCatalogJson(state.local);
     payload.hidden = [...state.hidden];
+    payload.resetToken = RESET_TOKEN;
     localStorage.setItem(STORE_KEY, JSON.stringify(payload));
     state.storeError = null;
   } catch (e) {
@@ -3073,26 +3082,6 @@ function importText(text, { vendor, us }) {
 
 $('c-import').addEventListener('click', () =>
   importText($('c-paste').value, { vendor: $('c-vendor').value, us: $('c-units').value === 'us' }));
-
-$('c-example').addEventListener('click', async () => {
-  try {
-    // The standalone build inlines the file; the hosted version fetches it.
-    let payload = window.EXAMPLE_CATALOGUE;
-    if (!payload) {
-      const r = await fetch('./data/example-catalogue.json');
-      if (!r.ok) throw new Error(r.status);
-      payload = await r.json();
-    }
-    const springs = cat.fromCatalogJson(payload);
-    addLocal(springs);
-    $('c-status').innerHTML = `<div class="callout warn"><p>Loaded ${springs.length} <strong>synthetic</strong>
-      springs. They are geometrically consistent and fine for trying the tool, but they are
-      <strong>not real parts</strong> &mdash; do not order from them.</p></div>`;
-  } catch (e) {
-    $('c-status').innerHTML = `<div class="callout bad"><p>Could not load the example catalogue (${esc(e.message)}).
-      If you opened this file directly from disk, serve the folder over HTTP instead.</p></div>`;
-  }
-});
 
 $('c-file').addEventListener('click', () => $('c-fileinput').click());
 $('c-fileinput').addEventListener('change', async (e) => {

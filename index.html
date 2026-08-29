@@ -373,7 +373,9 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
         page. Copy the whole thing, boilerplate and all; the compliance and country-of-origin lines get
         dropped. A missing part number is fine &mdash; the spring gets named from its dimensions.</li>
     </ul>
-    <p class="hint" style="margin-top:-8px">Springs you paste are saved in <strong>this browser</strong> and
+    <p class="hint" style="margin-top:-8px">Nothing ships with the tool &mdash; the catalogue starts empty
+      so no invented part number can ever be mistaken for a real one.
+      Springs you paste are saved in <strong>this browser</strong> and
       stay until you clear them. To make a list everyone sees on their first visit, in any browser:
       <strong>Download as JSON</strong> and commit the file over
       <code>data/catalogue.json</code> in the repository.</p>
@@ -403,7 +405,6 @@ End Type&#9;Closed"></textarea>
     </div>
     <div class="row">
       <button class="go" id="c-import">Parse and load</button>
-      <button class="alt" id="c-example">Load example catalogue</button>
       <button class="alt" id="c-file">Open a .json / .csv file</button>
       <button class="alt" id="c-download">Download as JSON</button>
       <button class="alt" id="c-restore" hidden>Restore hidden springs</button>

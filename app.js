@@ -8,6 +8,9 @@ import * as nlq from './nl-query.js';
 
 const $ = (id) => document.getElementById(id);
 const STORE_KEY = 'springcalc.catalog.v1';
+// Bumping this clears every browser's stored springs once, on next load.
+// Used to wipe the synthetic demo data the tool used to ship with.
+const RESET_TOKEN = '2026-08-27-clean-slate';
 
 const state = {
   lengthUnit: 'in',
@@ -97,6 +100,11 @@ function loadStore() {
     const raw = localStorage.getItem(STORE_KEY);
     if (!raw) return;
     const data = JSON.parse(raw);
+    if (data.resetToken !== RESET_TOKEN) {
+      // Everything stored before this token was demo data; start clean.
+      localStorage.removeItem(STORE_KEY);
+      return;
+    }
     state.local = cat.fromCatalogJson(data);
     state.hidden = new Set(Array.isArray(data.hidden) ? data.hidden : []);
   } catch (e) {
@@ -114,6 +122,7 @@ function saveStore() {
   try {
     const payload = cat.toCatalogJson(state.local);
     payload.hidden = [...state.hidden];
+    payload.resetToken = RESET_TOKEN;
     localStorage.setItem(STORE_KEY, JSON.stringify(payload));
     state.storeError = null;
   } catch (e) {
@@ -892,26 +901,6 @@ function importText(text, { vendor, us }) {
 
 $('c-import').addEventListener('click', () =>
   importText($('c-paste').value, { vendor: $('c-vendor').value, us: $('c-units').value === 'us' }));
-
-$('c-example').addEventListener('click', async () => {
-  try {
-    // The standalone build inlines the file; the hosted version fetches it.
-    let payload = window.EXAMPLE_CATALOGUE;
-    if (!payload) {
-      const r = await fetch('./data/example-catalogue.json');
-      if (!r.ok) throw new Error(r.status);
-      payload = await r.json();
-    }
-    const springs = cat.fromCatalogJson(payload);
-    addLocal(springs);
-    $('c-status').innerHTML = `<div class="callout warn"><p>Loaded ${springs.length} <strong>synthetic</strong>
-      springs. They are geometrically consistent and fine for trying the tool, but they are
-      <strong>not real parts</strong> &mdash; do not order from them.</p></div>`;
-  } catch (e) {
-    $('c-status').innerHTML = `<div class="callout bad"><p>Could not load the example catalogue (${esc(e.message)}).
-      If you opened this file directly from disk, serve the folder over HTTP instead.</p></div>`;
-  }
-});
 
 $('c-file').addEventListener('click', () => $('c-fileinput').click());
 $('c-fileinput').addEventListener('change', async (e) => {

@@ -109,8 +109,9 @@ what it ignored, field by field.
   too, as do metric tables.
 * `data/catalogue.json` is the shared list described above, and is empty until
   real data is committed to it.
-* `data/example-catalogue.tsv` / `.json` are **synthetic**, and load only when
-  someone clicks the example button — never automatically. They are
+* Nothing else ships. There is no sample data and no demo button: an invented
+  part number that reaches a purchase order is the one failure this tool must
+  not have. They are
   geometrically self-consistent and fine for trying the tool, but the part numbers
   are made up. Don't order from them.
 
