@@ -25,8 +25,8 @@ const state = {
   storeError: null,
   results: [],
   selected: null,
-  catSort: { key: null, dir: 'asc' },
-  catFilters: {},
+  cat: { sort: { key: null, dir: 'asc' }, filters: {} },
+  find: { sort: { key: null, dir: 'asc' }, filters: {} },
   catUnits: 'in',
 };
 
@@ -525,54 +525,41 @@ function renderResults(req) {
         The rate window above works without it.</p></div>`;
     box.querySelector('[data-goto]').addEventListener('click', () =>
       document.querySelector('nav.tabs button[data-tab="catalog"]').click());
+    $('f-detail').innerHTML = '';
     return;
   }
   const hits = sm.searchCatalog(state.catalogue, req);
   state.results = hits;
   const okCount = hits.filter((h) => h.ok).length;
-  const shown = hits.slice(0, MAX_RESULT_ROWS);
 
-  const rows = shown.map((h, i) => {
-    const w = h.evaluation.working;
-    const sev = severity(w?.travelUsedFraction);
-    return `<tr data-i="${i}" class="${h.ok ? '' : 'rejected'}">
-      <td class="l">${h.ok ? badge(sev, sev === 'ok' ? 'fits' : sev === 'warn' ? 'tight' : 'at limit') : badge('bad', 'no')}</td>
-      <td class="l">${esc(springName(h.spring))}${/cut-to-length/i.test(h.spring.family || '') ? ' <span class="pill warn">cut to length</span>' : ''}</td>
-      <td class="num">${Lnum(h.spring.od_mm)}</td>
-      <td class="num">${Lnum(h.spring.freeLength_mm)}</td>
-      <td class="num">${nf(sm.nPerMmToLbfPerIn(h.spring.rate_Npmm), 2)}</td>
-      <td class="num">${Lnum(w?.deflection_mm)}</td>
-      <td class="num">${Lnum(w?.installedLength_mm)}</td>
-      <td class="num">${pct(w?.travelUsedFraction)}</td>
-      <td class="num">&plusmn;${pct(w?.sensitivity.worstCaseFraction)}</td>
-      <td class="num">${pct(w?.utilisation)}</td>
-      <td class="l muted">${esc(h.ok ? '' : (h.rejected[0] || ''))}</td>
-    </tr>`;
-  }).join('');
+  const shown = buildTable(box, {
+    columns: FIND_COLUMNS,
+    rows: hits,
+    tState: state.find,
+    prefix: 'f',
+    cap: MAX_RESULT_ROWS,
+    rowKey: (h) => springKey(h.spring),
+    rowClass: (h) => (h.ok ? '' : 'rejected'),
+    expand: (h) => notesExpand(h.spring),
+    onRowClick: (h) => showDetail(h),
+    header: `<h2>${okCount} of ${state.catalogue.length} springs can deliver ${F(req.targetForce_N)}</h2>
+      <p class="hint" style="margin-top:-6px">Ranked by &ldquo;${esc($('f-sort').selectedOptions[0].textContent)}&rdquo;.
+        Click a row for the full working-point report below. &ldquo;Force band&rdquo; is what you actually get
+        once rate tolerance and assembly position error are counted &mdash; the reason a softer spring
+        compressed further beats a stiff one nudged slightly.</p>
+      ${tableHelpHtml('f', hits.length)}`,
+  });
 
-  box.innerHTML = `<h2>${okCount} of ${state.catalogue.length} springs can deliver ${F(req.targetForce_N)}</h2>
-    <div class="scroll"><table>
-      <thead><tr><th class="l"></th><th class="l">part</th><th>OD ${Lunit()}</th><th>free ${Lunit()}</th>
-        <th>rate lbf/in</th><th>compress ${Lunit()}</th><th>installed ${Lunit()}</th>
-        <th>travel used</th><th>force band</th><th>stress</th><th class="l">why not</th></tr></thead>
-      <tbody>${rows}</tbody></table></div>
-    ${hits.length > shown.length ? `<p class="hint">Showing the best ${shown.length} of ${hits.length}, ranked by
-      &ldquo;${esc($('f-sort').selectedOptions[0].textContent)}&rdquo;. Narrow it down above to see the rest.</p>` : ''}
-    <p class="hint">Click a row for the full working-point report. &ldquo;Force band&rdquo; is what you
-      actually get once rate tolerance and assembly position error are counted &mdash; the reason a softer
-      spring compressed further beats a stiff one nudged slightly.</p>`;
-
-  box.querySelectorAll('tbody tr').forEach((tr) => tr.addEventListener('click', () => {
-    box.querySelectorAll('tbody tr').forEach((x) => x.classList.remove('sel'));
-    tr.classList.add('sel');
-    showDetail(Number(tr.dataset.i));
-  }));
-  if (okCount) { box.querySelector('tbody tr').classList.add('sel'); showDetail(0); }
-  else $('f-detail').innerHTML = '';
+  if (shown.length) {
+    const first = box.querySelector('#f-rows tr[data-i]');
+    if (first) first.classList.add('sel');
+    showDetail(shown[0]);
+  } else {
+    $('f-detail').innerHTML = '';
+  }
 }
 
-function showDetail(i) {
-  const h = state.results[i];
+function showDetail(h) {
   if (!h) return;
   state.selected = h;
   const holder = $('f-detail');
@@ -797,78 +784,26 @@ $('a-save').addEventListener('click', () => {
     `<div class="callout"><p>Added to the catalogue (${state.catalogue.length} springs).</p></div>`);
 });
 
-/* ---------------------------------------------------------- CATALOG tab */
-
-function renderCatalogue() {
-  $('c-restore').hidden = state.hidden.size === 0;
-  if ($('tab-catalog').hidden) { state.catalogueStale = true; return; }
-  state.catalogueStale = false;
-  drawCatalogue();
-}
-
-/* ------------------------------------------------- the catalogue table
- * Every field the vendor publishes or the engine works out, one column
- * each, all sortable and all filterable. The header and filter row are
- * built once and only the tbody is redrawn, so typing in a filter never
- * loses focus.
+/* ---------------------------------------------------- sortable tables ----
+ * The Catalogue and the search results are the same thing: a wide table of
+ * springs, every column sortable and filterable. One implementation, two
+ * column sets. Header and filter row are built once and only the body is
+ * redrawn, so typing in a filter never loses focus.
+ *
+ * Both read in the units the vendor published rather than the working units
+ * chosen elsewhere -- these are lists of parts, and they should match the
+ * source they came from.
  */
-const CAT_COLUMNS = [
-  { key: 'source', label: 'source', kind: 'select', align: 'l',
-    text: (s) => (s._origin === 'shared' ? 'shipped' : 'yours'),
-    html: (s) => (s._origin === 'shared' ? badge('ok', 'shipped') : badge('warn', 'yours')) },
-  { key: 'part', label: 'part', kind: 'text', align: 'l',
-    text: (s) => springName(s),
-    html: (s) => (s.url
-      ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(springName(s))}</a>`
-      : esc(springName(s))) },
-  { key: 'family', label: 'family', kind: 'select', align: 'l', text: (s) => s.family || '' },
-  { key: 'material', label: 'material', kind: 'select', align: 'l', derivedKey: 'materialKey', text: (s) => s.material || '' },
-  { key: 'ends', label: 'ends', kind: 'select', align: 'l',
-    text: (s) => s.ends || (s.endsKey ? sm.getEnds(s.endsKey).name : '') },
-  { key: 'od', label: 'OD', unit: 'length', kind: 'num', num: (s) => s.od_mm },
-  { key: 'id', label: 'ID', unit: 'length', kind: 'num', derivedKey: 'id_mm', num: (s) => s.id_mm },
-  { key: 'wire', label: 'wire', unit: 'length', kind: 'num', derivedKey: 'wireDia_mm', num: (s) => s.wireDia_mm },
-  { key: 'free', label: 'free lg', unit: 'length', kind: 'num', num: (s) => s.freeLength_mm },
-  { key: 'solid', label: 'solid lg', unit: 'length', kind: 'num', derivedKey: 'solidLength_mm', num: (s) => s.solidLength_mm },
-  { key: 'atload', label: 'lg at max load', unit: 'length', kind: 'num', num: (s) => s.lengthAtMaxLoad_mm },
-  { key: 'travel', label: 'usable travel', unit: 'length', kind: 'num',
-    derivedKey: ['usableTravel_mm', 'maxDeflection_mm'], num: (s) => s.usableTravel_mm },
-  { key: 'rate', label: 'rate', unit: 'rate', kind: 'num', derivedKey: 'rate_Npmm', num: (s) => s.rate_Npmm },
-  { key: 'ratetol', label: 'rate tol', kind: 'num', dp: 1,
-    num: (s) => (s.rateTol == null ? null : s.rateTol * 100), suffix: '%' },
-  { key: 'maxload', label: 'vendor max load', unit: 'force', kind: 'num', num: (s) => s.maxLoad_N },
-  { key: 'maxusable', label: 'max usable load', unit: 'force', kind: 'num', alwaysDerived: true, num: (s) => s.maxUsableForce_N },
-  { key: 'coils', label: 'total coils', kind: 'num', dp: 1, derivedKey: 'totalCoils', num: (s) => s.totalCoils },
-  { key: 'index', label: 'index C', kind: 'num', dp: 1, alwaysDerived: true, num: (s) => s.springIndex },
-  { key: 'temp', label: 'max temp', unit: 'temp', kind: 'num', num: (s) => s.maxTemp_C },
-  { key: 'milspec', label: 'mil spec', kind: 'text', align: 'l', text: (s) => s.milSpec || '' },
-  { key: 'colour', label: 'colour', kind: 'select', align: 'l', text: (s) => s.colour || '' },
-  { key: 'pkg', label: 'pkg qty', kind: 'num', dp: 0, num: (s) => s.pkgQty },
-  { key: 'price', label: 'price/pkg', kind: 'num', dp: 2,
-    num: (s) => (s.price == null ? null : parseFloat(String(s.price).replace(/[^0-9.]/g, ''))) },
-  { key: 'notes', label: 'notes', kind: 'num', dp: 0, align: 'l',
-    num: (s) => s.warnings.length,
-    html: (s) => (s.incomplete
-      ? badge('bad', 'incomplete')
-      : s.warnings.length
-        ? `<button class="pill warn as-button" data-notes="${esc(springKey(s))}"
-             aria-expanded="false">${s.warnings.length} note${s.warnings.length === 1 ? '' : 's'}</button>`
-        : '') },
-];
 
-/**
- * The catalogue is a reference list, so it reads in the units the vendor
- * published -- inches, pounds, lbf/in and degrees F for a US listing -- not
- * in the working units chosen elsewhere on the page. Where a catalogue mixes
- * both, the majority wins and the header says which.
- */
 function catalogueUnits() {
   const seen = new Set(state.catalogue.map((s) => s.sourceUnits || state.lengthUnit));
   return seen.size === 1 ? [...seen][0] : state.lengthUnit;
 }
-function colValue(col, spring) {
+
+/** A numeric column's value, in the units the table is showing. */
+function colValue(col, row) {
   if (col.kind !== 'num') return null;
-  const raw = col.num(spring);
+  const raw = col.num(row);
   if (raw == null || !Number.isFinite(raw)) return null;
   const us = state.catUnits === 'in';
   if (col.unit === 'length') return us ? sm.mmToIn(raw) : raw;
@@ -894,24 +829,45 @@ function colUnitLabel(col) {
   if (col.unit === 'temp') return us ? '°F' : '°C';
   return '';
 }
-/** Sorting always uses the stored SI value, so a mixed catalogue still orders right. */
-function colSortValue(col, spring) {
+/** Sorting uses the stored SI value, so a mixed-unit list still orders right. */
+function colSortValue(col, row) {
   if (col.kind !== 'num') return null;
-  const raw = col.num(spring);
+  const raw = col.num(row);
   return raw == null || !Number.isFinite(raw) ? null : raw;
 }
-/** Did the calculator work this cell out, rather than read it from the vendor? */
-function isDerived(col, spring) {
+function colText(col, row) {
+  if (col.kind !== 'num') return col.text(row);
+  const v = colValue(col, row);
+  return v == null ? '' : nf(v, colDecimals(col)) + (col.suffix || '');
+}
+
+/** Was this cell worked out rather than read from the vendor? */
+function isDerived(col, row) {
   if (col.alwaysDerived) return true;
   if (!col.derivedKey) return false;
+  const spring = col.spring ? col.spring(row) : row;
   const keys = Array.isArray(col.derivedKey) ? col.derivedKey : [col.derivedKey];
   return keys.some((k) => (spring.derived || []).includes(k));
 }
-/** What the cell reads as, which is also what a plain-text filter matches. */
-function colText(col, spring) {
-  if (col.kind !== 'num') return col.text(spring);
-  const v = colValue(col, spring);
-  return v == null ? '' : nf(v, colDecimals(col)) + (col.suffix || '');
+
+/**
+ * How to label a column's heading. "derived" only when it is true of every
+ * row that has a value -- a blanket label on a mixed column would be false.
+ */
+function derivedLabel(col, rows) {
+  if (col.alwaysDerived) return { text: 'derived', title: 'Always worked out by the calculator.' };
+  if (!col.derivedKey || !rows.length) return null;
+  let withValue = 0;
+  let derived = 0;
+  for (const r of rows) {
+    if (colText(col, r) === '') continue;
+    withValue++;
+    if (isDerived(col, r)) derived++;
+  }
+  if (!derived) return null;
+  return derived === withValue
+    ? { text: 'derived', title: `Worked out by the calculator for all ${withValue} of these.` }
+    : { text: 'some derived', title: `Worked out by the calculator for ${derived} of ${withValue}; the rest are as published.` };
 }
 
 /**
@@ -922,42 +878,39 @@ function colText(col, spring) {
 function makeFilter(col, expr) {
   const t = String(expr || '').trim();
   if (!t) return null;
-  if (col.kind === 'select') return (s) => colText(col, s) === t;
+  if (col.kind === 'select') return (r) => colText(col, r) === t;
   if (col.kind === 'num') {
     let m = t.match(/^(>=|<=|>|<|=)\s*(-?[\d.]+)$/);
     if (m) {
       const v = parseFloat(m[2]);
       const ops = { '>': (x) => x > v, '<': (x) => x < v, '>=': (x) => x >= v, '<=': (x) => x <= v, '=': (x) => x === v };
-      return (s) => { const x = colValue(col, s); return x != null && ops[m[1]](x); };
+      return (r) => { const x = colValue(col, r); return x != null && ops[m[1]](x); };
     }
     m = t.match(/^(-?[\d.]+)\s*(?:\.\.|-|to)\s*(-?[\d.]+)$/);
     if (m) {
       const a = Math.min(parseFloat(m[1]), parseFloat(m[2]));
       const b = Math.max(parseFloat(m[1]), parseFloat(m[2]));
-      return (s) => { const x = colValue(col, s); return x != null && x >= a && x <= b; };
+      return (r) => { const x = colValue(col, r); return x != null && x >= a && x <= b; };
     }
   }
   const needle = t.toLowerCase();
-  return (s) => colText(col, s).toLowerCase().includes(needle);
+  return (r) => colText(col, r).toLowerCase().includes(needle);
 }
 
-function filteredCatalogue() {
-  const active = CAT_COLUMNS
-    .map((col) => [col, makeFilter(col, state.catFilters[col.key])])
+function applyFiltersAndSort(rows, columns, tState) {
+  const active = columns
+    .map((col) => [col, makeFilter(col, tState.filters[col.key])])
     .filter(([, f]) => f);
-  let list = active.length
-    ? state.catalogue.filter((s) => active.every(([, f]) => f(s)))
-    : state.catalogue.slice();
+  let list = active.length ? rows.filter((r) => active.every(([, f]) => f(r))) : rows.slice();
 
-  const sort = state.catSort;
-  if (sort.key) {
-    const col = CAT_COLUMNS.find((c) => c.key === sort.key);
-    const dir = sort.dir === 'desc' ? -1 : 1;
+  if (tState.sort.key) {
+    const col = columns.find((c) => c.key === tState.sort.key);
+    const dir = tState.sort.dir === 'desc' ? -1 : 1;
     list.sort((a, b) => {
       if (col.kind === 'num') {
         const x = colSortValue(col, a);
         const y = colSortValue(col, b);
-        // A blank is never "smallest" -- unknowns sort to the bottom either way.
+        // A blank is never "smallest" -- unknowns sort last either way.
         if (x == null && y == null) return 0;
         if (x == null) return 1;
         if (y == null) return -1;
@@ -969,53 +922,213 @@ function filteredCatalogue() {
   return list;
 }
 
-function catalogueRowsHtml(list) {
-  const span = CAT_COLUMNS.length + 1;
-  return list.map((s) => `<tr>
-    ${CAT_COLUMNS.map((col) => `<td class="${col.align === 'l' || col.kind !== 'num' ? 'l' : 'num'}">${
-      col.html ? col.html(s) : esc(colText(col, s))
-    }${!col.html && !col.alwaysDerived && isDerived(col, s) && colText(col, s)
-      ? ' <span class="derived">derived</span>' : ''}</td>`).join('')}
-    <td class="l"><button class="link" data-del="${esc(springKey(s))}" data-origin="${s._origin}">remove</button></td>
-  </tr>
-  ${s.warnings.length ? `<tr class="notes-row" data-for="${esc(springKey(s))}" hidden>
-    <td class="l" colspan="${span}"><ul class="notes">${s.warnings.map((w) => `<li>${esc(w)}</li>`).join('')}</ul></td>
-  </tr>` : ''}`).join('');
-}
-
-/** Redraw only the rows, so filter inputs keep focus and their caret. */
-function refreshCatalogueRows() {
-  const body = $('c-rows');
-  if (!body) return;
+/**
+ * Build a table into `box` and keep it live. `spec` supplies the columns, the
+ * rows, and the per-table extras; only the tbody is rebuilt on sort/filter.
+ */
+function buildTable(box, spec) {
+  const { columns, rows, tState, prefix, trailing, expand, rowKey, rowClass, onRowClick, cap } = spec;
   state.catUnits = catalogueUnits();
-  const list = filteredCatalogue();
-  body.innerHTML = catalogueRowsHtml(list);
-  $('c-count').textContent = list.length === state.catalogue.length
-    ? `all ${state.catalogue.length}`
-    : `${list.length} of ${state.catalogue.length}`;
-  CAT_COLUMNS.forEach((col) => {
-    const th = document.querySelector(`th[data-col="${col.key}"]`);
-    if (th) th.setAttribute('aria-sort',
-      state.catSort.key === col.key ? (state.catSort.dir === 'desc' ? 'descending' : 'ascending') : 'none');
+
+  const options = {};
+  columns.filter((c) => c.kind === 'select').forEach((col) => {
+    options[col.key] = [...new Set(rows.map((r) => colText(col, r)).filter(Boolean))].sort();
   });
-  wireRowButtons();
+
+  const heads = columns.map((col) => {
+    const unit = colUnitLabel(col);
+    const der = derivedLabel(col, rows);
+    return `<th class="${col.align === 'l' || col.kind !== 'num' ? 'l' : ''}" data-col="${col.key}" aria-sort="none">
+      <button class="sortable" data-sort="${col.key}"${der ? ` title="${esc(der.title)}"` : ''}>${esc(col.label)}${
+        unit ? ` <span class="u">${esc(unit)}</span>` : ''}${
+        der ? ` <span class="derived">${der.text}</span>` : ''}<span class="caret"></span></button>
+    </th>`;
+  }).join('');
+
+  const filters = columns.map((col) => {
+    if (col.kind === 'select') {
+      return `<th class="l"><select data-filter="${col.key}"><option value="">any</option>${
+        options[col.key].map((o) => `<option${o === tState.filters[col.key] ? ' selected' : ''}>${esc(o)}</option>`).join('')
+      }</select></th>`;
+    }
+    return `<th class="l"><input data-filter="${col.key}" value="${esc(tState.filters[col.key] || '')}"
+      placeholder="${col.kind === 'num' ? '>2, 1..3' : 'contains'}"></th>`;
+  }).join('');
+
+  const trail = (trailing || []).map(() => '<th class="l"></th>').join('');
+  box.innerHTML = `${spec.header || ''}
+    <div class="scroll cat-scroll"><table class="cat">
+      <thead><tr>${heads}${trail}</tr><tr class="filters">${filters}${trail}</tr></thead>
+      <tbody id="${prefix}-rows"></tbody></table></div>${spec.footer || ''}`;
+
+  const span = columns.length + (trailing || []).length;
+  const refresh = () => {
+    state.catUnits = catalogueUnits();
+    const list = applyFiltersAndSort(rows, columns, tState);
+    const shown = cap ? list.slice(0, cap) : list;
+    document.getElementById(`${prefix}-rows`).innerHTML = shown.map((r, i) => `<tr data-i="${i}"
+      class="${rowClass ? rowClass(r) : ''}">
+      ${columns.map((col) => `<td class="${col.align === 'l' || col.kind !== 'num' ? 'l' : 'num'}">${
+        col.html ? col.html(r) : esc(colText(col, r))}</td>`).join('')}
+      ${(trailing || []).map((t) => `<td class="l">${t.html(r)}</td>`).join('')}
+    </tr>${expand && expand(r) ? `<tr class="notes-row" data-for="${esc(rowKey(r))}" hidden>
+      <td class="l" colspan="${span}">${expand(r)}</td></tr>` : ''}`).join('');
+
+    const countEl = document.getElementById(`${prefix}-count`);
+    if (countEl) {
+      countEl.textContent = list.length === rows.length ? `all ${rows.length}` : `${list.length} of ${rows.length}`;
+    }
+    const capEl = document.getElementById(`${prefix}-capnote`);
+    if (capEl) {
+      capEl.innerHTML = list.length > shown.length
+        ? `Drawing the top ${shown.length}; narrow the filters to see the rest.` : '';
+    }
+    columns.forEach((col) => {
+      const th = box.querySelector(`th[data-col="${col.key}"]`);
+      if (th) th.setAttribute('aria-sort',
+        tState.sort.key === col.key ? (tState.sort.dir === 'desc' ? 'descending' : 'ascending') : 'none');
+    });
+    wireRowButtons(box);
+    if (onRowClick) {
+      box.querySelectorAll(`#${prefix}-rows tr[data-i]`).forEach((tr) => tr.addEventListener('click', (e) => {
+        if (e.target.closest('button, a')) return;
+        box.querySelectorAll('tr[data-i]').forEach((x) => x.classList.remove('sel'));
+        tr.classList.add('sel');
+        onRowClick(shown[Number(tr.dataset.i)], Number(tr.dataset.i));
+      }));
+    }
+    return shown;
+  };
+
+  box.querySelectorAll('[data-sort]').forEach((b) => b.addEventListener('click', () => {
+    const key = b.dataset.sort;
+    tState.sort = tState.sort.key === key
+      ? { key, dir: tState.sort.dir === 'asc' ? 'desc' : 'asc' }
+      : { key, dir: 'asc' };
+    refresh();
+  }));
+  box.querySelectorAll('[data-filter]').forEach((el) => {
+    const run = () => { tState.filters[el.dataset.filter] = el.value; refresh(); };
+    el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', run);
+  });
+  const clear = document.getElementById(`${prefix}-clearfilters`);
+  if (clear) clear.addEventListener('click', () => {
+    tState.filters = {};
+    box.querySelectorAll('[data-filter]').forEach((el) => { el.value = ''; });
+    refresh();
+  });
+  return refresh();
 }
 
-function wireRowButtons() {
-  const box = $('c-list');
-  box.querySelectorAll('[data-notes]').forEach((b) => b.addEventListener('click', () => {
+function wireRowButtons(box) {
+  box.querySelectorAll('[data-notes]').forEach((b) => b.addEventListener('click', (e) => {
+    e.stopPropagation();
     const target = box.querySelector(`.notes-row[data-for="${CSS.escape(b.dataset.notes)}"]`);
     if (!target) return;
     target.hidden = !target.hidden;
     b.setAttribute('aria-expanded', String(!target.hidden));
   }));
-  box.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => {
+  box.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', (e) => {
+    e.stopPropagation();
     const key = b.dataset.del;
     // A shipped spring is not ours to delete -- hide it for this browser only.
     if (b.dataset.origin === 'shared') state.hidden.add(key);
     else state.local = state.local.filter((x) => springKey(x) !== key);
     saveStore(); rebuildCatalogue(); renderCatalogue();
   }));
+}
+
+/* ------------------------------------------------------- the column sets */
+
+const notesCell = (s) => (s.incomplete
+  ? badge('bad', 'incomplete')
+  : s.warnings.length
+    ? `<button class="pill warn as-button" data-notes="${esc(springKey(s))}"
+         aria-expanded="false">${s.warnings.length} note${s.warnings.length === 1 ? '' : 's'}</button>`
+    : '');
+const notesExpand = (s) => (s.warnings.length
+  ? `<ul class="notes">${s.warnings.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : null);
+
+/** Columns describing the spring itself. `pick` maps a row to its spring. */
+function springColumns(pick) {
+  const p = pick || ((r) => r);
+  const col = (o) => ({ ...o, spring: p });
+  return [
+    col({ key: 'part', label: 'part', kind: 'text', align: 'l',
+      text: (r) => springName(p(r)),
+      html: (r) => (p(r).url
+        ? `<a href="${esc(p(r).url)}" target="_blank" rel="noopener">${esc(springName(p(r)))}</a>`
+        : esc(springName(p(r)))) }),
+    col({ key: 'family', label: 'family', kind: 'select', align: 'l', text: (r) => p(r).family || '' }),
+    col({ key: 'material', label: 'material', kind: 'select', align: 'l',
+      derivedKey: 'materialKey', text: (r) => p(r).material || '' }),
+    col({ key: 'ends', label: 'ends', kind: 'select', align: 'l',
+      text: (r) => p(r).ends || (p(r).endsKey ? sm.getEnds(p(r).endsKey).name : '') }),
+    col({ key: 'od', label: 'OD', unit: 'length', kind: 'num', num: (r) => p(r).od_mm }),
+    col({ key: 'id', label: 'ID', unit: 'length', kind: 'num', derivedKey: 'id_mm', num: (r) => p(r).id_mm }),
+    col({ key: 'wire', label: 'wire', unit: 'length', kind: 'num', derivedKey: 'wireDia_mm', num: (r) => p(r).wireDia_mm }),
+    col({ key: 'free', label: 'free lg', unit: 'length', kind: 'num', num: (r) => p(r).freeLength_mm }),
+    col({ key: 'solid', label: 'solid lg', unit: 'length', kind: 'num',
+      derivedKey: 'solidLength_mm', num: (r) => p(r).solidLength_mm }),
+    col({ key: 'atload', label: 'lg at max load', unit: 'length', kind: 'num', num: (r) => p(r).lengthAtMaxLoad_mm }),
+    col({ key: 'travel', label: 'usable travel', unit: 'length', kind: 'num',
+      derivedKey: ['usableTravel_mm', 'maxDeflection_mm'], num: (r) => p(r).usableTravel_mm }),
+    col({ key: 'rate', label: 'rate', unit: 'rate', kind: 'num', derivedKey: 'rate_Npmm', num: (r) => p(r).rate_Npmm }),
+    col({ key: 'ratetol', label: 'rate tol', kind: 'num', dp: 1, suffix: '%',
+      num: (r) => (p(r).rateTol == null ? null : p(r).rateTol * 100) }),
+    col({ key: 'maxload', label: 'vendor max load', unit: 'force', kind: 'num', num: (r) => p(r).maxLoad_N }),
+    col({ key: 'maxusable', label: 'max usable load', unit: 'force', kind: 'num',
+      alwaysDerived: true, num: (r) => p(r).maxUsableForce_N }),
+    col({ key: 'coils', label: 'total coils', kind: 'num', dp: 1, derivedKey: 'totalCoils', num: (r) => p(r).totalCoils }),
+    col({ key: 'index', label: 'index C', kind: 'num', dp: 1, alwaysDerived: true, num: (r) => p(r).springIndex }),
+    col({ key: 'temp', label: 'max temp', unit: 'temp', kind: 'num', num: (r) => p(r).maxTemp_C }),
+    col({ key: 'milspec', label: 'mil spec', kind: 'text', align: 'l', text: (r) => p(r).milSpec || '' }),
+    col({ key: 'colour', label: 'colour', kind: 'select', align: 'l', text: (r) => p(r).colour || '' }),
+    col({ key: 'pkg', label: 'pkg qty', kind: 'num', dp: 0, num: (r) => p(r).pkgQty }),
+    col({ key: 'price', label: 'price/pkg', kind: 'num', dp: 2,
+      num: (r) => (p(r).price == null ? null : parseFloat(String(p(r).price).replace(/[^0-9.]/g, ''))) }),
+    col({ key: 'notes', label: 'notes', kind: 'num', dp: 0, align: 'l',
+      num: (r) => p(r).warnings.length, html: (r) => notesCell(p(r)) }),
+  ];
+}
+
+const CAT_COLUMNS = [
+  { key: 'source', label: 'source', kind: 'select', align: 'l',
+    text: (s) => (s._origin === 'shared' ? 'shipped' : 'yours'),
+    html: (s) => (s._origin === 'shared' ? badge('ok', 'shipped') : badge('warn', 'yours')) },
+  ...springColumns(),
+];
+
+/** The search results: the working point first, then the spring itself. */
+const FIND_COLUMNS = [
+  { key: 'fits', label: 'fits', kind: 'select', align: 'l',
+    text: (h) => (h.ok ? (severity(h.evaluation.working?.travelUsedFraction) === 'ok' ? 'fits'
+      : severity(h.evaluation.working?.travelUsedFraction) === 'warn' ? 'tight' : 'at limit') : 'no'),
+    html: (h) => {
+      const sev = severity(h.evaluation.working?.travelUsedFraction);
+      return h.ok ? badge(sev, sev === 'ok' ? 'fits' : sev === 'warn' ? 'tight' : 'at limit') : badge('bad', 'no');
+    } },
+  { key: 'compress', label: 'compress by', unit: 'length', kind: 'num', alwaysDerived: true,
+    num: (h) => h.evaluation.working?.deflection_mm },
+  { key: 'installed', label: 'installed lg', unit: 'length', kind: 'num', alwaysDerived: true,
+    num: (h) => h.evaluation.working?.installedLength_mm },
+  { key: 'used', label: 'travel used', kind: 'num', dp: 0, suffix: '%', alwaysDerived: true,
+    num: (h) => (h.evaluation.working?.travelUsedFraction == null ? null : h.evaluation.working.travelUsedFraction * 100) },
+  { key: 'band', label: 'force band ±', kind: 'num', dp: 0, suffix: '%', alwaysDerived: true,
+    num: (h) => (h.evaluation.working?.sensitivity == null ? null : h.evaluation.working.sensitivity.worstCaseFraction * 100) },
+  { key: 'stress', label: 'stress', kind: 'num', dp: 0, suffix: '%', alwaysDerived: true,
+    num: (h) => (h.evaluation.working?.utilisation == null ? null : h.evaluation.working.utilisation * 100) },
+  ...springColumns((h) => h.spring),
+  { key: 'why', label: 'why not', kind: 'text', align: 'l', text: (h) => (h.ok ? '' : h.rejected[0] || '') },
+];
+
+/* --------------------------------------------------------- the catalogue */
+
+function renderCatalogue() {
+  $('c-restore').hidden = state.hidden.size === 0;
+  if ($('tab-catalog').hidden) { state.catalogueStale = true; return; }
+  state.catalogueStale = false;
+  drawCatalogue();
 }
 
 function drawCatalogue() {
@@ -1033,67 +1146,35 @@ function drawCatalogue() {
     return;
   }
 
-  // Options for the categorical filters come from what is actually loaded.
-  const options = {};
-  CAT_COLUMNS.filter((c) => c.kind === 'select').forEach((col) => {
-    options[col.key] = [...new Set(state.catalogue.map((s) => colText(col, s)).filter(Boolean))].sort();
+  buildTable(box, {
+    columns: CAT_COLUMNS,
+    rows: state.catalogue,
+    tState: state.cat,
+    prefix: 'c',
+    rowKey: (s) => springKey(s),
+    expand: notesExpand,
+    trailing: [{ html: (s) => `<button class="link" data-del="${esc(springKey(s))}" data-origin="${s._origin}">remove</button>` }],
+    header: `<h2>Loaded springs (${state.catalogue.length})</h2>${warn}
+      <p class="hint" style="margin-top:-6px">${shipped} shipped with the site &mdash; everyone who opens
+        it sees these. ${mine} added on this browser only.
+        ${state.catalogue.filter((x) => x.warnings.length).length} carry notes &mdash; things worth knowing
+        about a spring, not faults. Click a note badge to read them.</p>
+      ${tableHelpHtml('c', state.catalogue.length)}`,
+    footer: hiddenNote,
   });
+}
 
-  const heads = CAT_COLUMNS.map((col) => {
-    const unit = colUnitLabel(col);
-    return `<th class="${col.align === 'l' || col.kind !== 'num' ? 'l' : ''}" data-col="${col.key}" aria-sort="none">
-      <button class="sortable" data-sort="${col.key}">${esc(col.label)}${unit ? ` <span class="u">${esc(unit)}</span>` : ''}${
-        col.alwaysDerived ? ' <span class="derived">derived</span>' : ''}<span class="caret"></span></button>
-    </th>`;
-  }).join('');
-
-  const filters = CAT_COLUMNS.map((col) => {
-    const v = esc(state.catFilters[col.key] || '');
-    if (col.kind === 'select') {
-      return `<th class="l"><select data-filter="${col.key}"><option value="">any</option>${
-        options[col.key].map((o) => `<option${o === state.catFilters[col.key] ? ' selected' : ''}>${esc(o)}</option>`).join('')
-      }</select></th>`;
-    }
-    return `<th class="l"><input data-filter="${col.key}" value="${v}"
-      placeholder="${col.kind === 'num' ? '>2, 1..3' : 'contains'}"></th>`;
-  }).join('');
-
-  box.innerHTML = `<h2>Loaded springs (${state.catalogue.length})</h2>${warn}
-    <p class="hint" style="margin-top:-6px">${shipped} shipped with the site &mdash; everyone who opens
-      it sees these. ${mine} added on this browser only.
-      ${state.catalogue.filter((x) => x.warnings.length).length} carry notes &mdash; things worth knowing
-      about a spring, not faults. Click a note badge to read them.</p>
-    <p class="hint">Shown in the units the vendor publishes
-      (${state.catUnits === 'in' ? 'inches, pounds, lbf/in, &deg;F' : 'mm, newtons, N/mm, &deg;C'}), whatever
-      the working units are set to elsewhere. Anything marked
-      <span class="derived">derived</span> the calculator worked out; everything else is as published.
-      <br>Click any heading to sort. The row under the headings filters:
-      type text to match, or a comparison on a number column &mdash;
-      <code>&gt;2</code>, <code>&lt;=0.5</code>, <code>1..3</code>.
-      Showing <strong id="c-count">all ${state.catalogue.length}</strong>.
-      <button class="link" id="c-clearfilters">clear table filters</button></p>
-    <div class="scroll cat-scroll"><table class="cat">
-      <thead><tr>${heads}<th class="l"></th></tr>
-        <tr class="filters">${filters}<th class="l"></th></tr></thead>
-      <tbody id="c-rows"></tbody></table></div>${hiddenNote}`;
-
-  box.querySelectorAll('[data-sort]').forEach((b) => b.addEventListener('click', () => {
-    const key = b.dataset.sort;
-    state.catSort = state.catSort.key === key
-      ? { key, dir: state.catSort.dir === 'asc' ? 'desc' : 'asc' }
-      : { key, dir: 'asc' };
-    refreshCatalogueRows();
-  }));
-  box.querySelectorAll('[data-filter]').forEach((el) => {
-    const run = () => { state.catFilters[el.dataset.filter] = el.value; refreshCatalogueRows(); };
-    el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', run);
-  });
-  $('c-clearfilters').addEventListener('click', () => {
-    state.catFilters = {};
-    box.querySelectorAll('[data-filter]').forEach((el) => { el.value = ''; });
-    refreshCatalogueRows();
-  });
-  refreshCatalogueRows();
+/** The shared explainer above both tables. */
+function tableHelpHtml(prefix, total) {
+  return `<p class="hint">Shown in the units the vendor publishes
+    (${state.catUnits === 'in' ? 'inches, pounds, lbf/in, &deg;F' : 'mm, newtons, N/mm, &deg;C'}), whatever
+    the working units are set to elsewhere. A heading marked
+    <span class="derived">derived</span> is worked out by the calculator; everything else is as published.
+    <br>Click any heading to sort. The row under the headings filters: type text to match, or a comparison
+    on a number column &mdash; <code>&gt;2</code>, <code>&lt;=0.5</code>, <code>1..3</code>.
+    Showing <strong id="${prefix}-count">all ${total}</strong>.
+    <button class="link" id="${prefix}-clearfilters">clear table filters</button>
+    <span id="${prefix}-capnote"></span></p>`;
 }
 
 function importText(text, { vendor, us }) {

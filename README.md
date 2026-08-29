@@ -115,14 +115,20 @@ The catalogue table carries every field, published and derived: family, material
 ends, OD, ID, wire, free / solid / at-max-load lengths, usable travel, rate and
 its tolerance, the vendor's max load beside the max usable load, coil count,
 spring index, temperature rating, mil spec, colour, pack quantity and price.
-It reads in **the units the vendor published** — inches, pounds, lbf/in and °F for
+The **search results use the same table** — the working point first (compress by,
+installed length, travel used, force band, stress), then every column the catalogue
+has. Same sorting, same filters, so a search can be narrowed by any published field
+after the fact. Clicking a row still opens the full working-point report beneath it.
+
+Both read in **the units the vendor published** — inches, pounds, lbf/in and °F for
 a US listing — whatever the working units are set to elsewhere on the page, because
 a catalogue is a reference list and should match the source it came from. Each
 spring records its own `sourceUnits`, so a metric catalogue reads in mm and N.
 
-Anything the calculator worked out rather than read is marked **derived** — solid
-length, usable travel, coil count, and any diameter or rate reconstructed from the
-others. Two columns are always derived and say so in the heading.
+Anything the calculator worked out rather than read is marked **derived in the
+column heading**, not on every cell. The label is only applied when it is true of
+every row that has a value; a column that is derived for some springs and published
+for others reads *some derived*, with the exact count in its tooltip.
 
 Every heading sorts, and the row beneath them filters — plain text matches what
 the cell shows, and number columns also take `>2`, `<=0.5`, `1..3`. Sorting uses
