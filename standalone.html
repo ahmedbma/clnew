@@ -2247,11 +2247,9 @@ const STORE_KEY = 'springcalc.catalog.v1';
 // Bumping this clears every browser's stored springs once, on next load.
 // Used to wipe the synthetic demo data the tool used to ship with.
 const RESET_TOKEN = '2026-08-27-clean-slate';
-// Drawing a few thousand table rows costs seconds of layout for a list nobody
-// reads to the end. The engine handles the whole catalogue; only the visible
-// slice is rendered.
+// Results are ranked, so a window onto the best of them is the useful view.
+// The catalogue is a reference list and shows in full.
 const MAX_RESULT_ROWS = 100;
-const MAX_CATALOGUE_ROWS = 200;
 
 const state = {
   lengthUnit: 'in',
@@ -2331,6 +2329,7 @@ document.querySelectorAll('nav.tabs button').forEach((b) => {
   b.addEventListener('click', () => {
     document.querySelectorAll('nav.tabs button').forEach((x) => x.setAttribute('aria-selected', String(x === b)));
     document.querySelectorAll('.panel').forEach((p) => { p.hidden = p.id !== `tab-${b.dataset.tab}`; });
+    if (b.dataset.tab === 'catalog' && state.catalogueStale) renderCatalogue();
   });
 });
 
@@ -3032,6 +3031,13 @@ $('a-save').addEventListener('click', () => {
 /* ---------------------------------------------------------- CATALOG tab */
 
 function renderCatalogue() {
+  $('c-restore').hidden = state.hidden.size === 0;
+  if ($('tab-catalog').hidden) { state.catalogueStale = true; return; }
+  state.catalogueStale = false;
+  drawCatalogue();
+}
+
+function drawCatalogue() {
   const box = $('c-list');
   const shipped = state.catalogue.filter((x) => x._origin === 'shared').length;
   const mine = state.catalogue.filter((x) => x._origin === 'local').length;
@@ -3044,12 +3050,10 @@ function renderCatalogue() {
   if (!state.catalogue.length) {
     box.innerHTML = `<h2>Loaded springs</h2>${warn}
       <p class="muted">Nothing loaded yet. Paste a vendor table above, or open a saved .json file.</p>${hiddenNote}`;
-    wireCatalogueButtons(box);
     return;
   }
 
-  const shownRows = state.catalogue.slice(0, MAX_CATALOGUE_ROWS);
-  const rows = shownRows.map((s) => `<tr>
+  const rows = state.catalogue.map((s) => `<tr>
     <td class="l">${s._origin === 'shared' ? badge('ok', 'shipped') : badge('warn', 'yours')}</td>
     <td class="l">${esc(springName(s))}</td>
     <td class="l muted">${esc(s.vendor || '')}</td>
@@ -3080,10 +3084,7 @@ function renderCatalogue() {
       <thead><tr><th class="l">source</th><th class="l">part</th><th class="l">vendor</th>
         <th>OD ${Lunit()}</th><th>wire ${Lunit()}</th><th>free ${Lunit()}</th><th>rate lbf/in</th>
         <th>solid ${Lunit()}</th><th>max load</th><th class="l">notes</th><th class="l"></th></tr></thead>
-      <tbody>${rows}</tbody></table></div>
-    ${state.catalogue.length > shownRows.length
-      ? `<p class="hint">Listing the first ${shownRows.length}. All ${state.catalogue.length} are searched
-         &mdash; this table is just a window on them.</p>` : ''}${hiddenNote}`;
+      <tbody>${rows}</tbody></table></div>${hiddenNote}`;
 
   box.querySelectorAll('[data-notes]').forEach((b) => b.addEventListener('click', () => {
     const target = box.querySelector(`.notes-row[data-for="${CSS.escape(b.dataset.notes)}"]`);
@@ -3098,11 +3099,6 @@ function renderCatalogue() {
     else state.local = state.local.filter((x) => springKey(x) !== key);
     saveStore(); rebuildCatalogue(); renderCatalogue();
   }));
-  wireCatalogueButtons(box);
-}
-
-function wireCatalogueButtons() {
-  $('c-restore').hidden = state.hidden.size === 0;
 }
 
 /**
