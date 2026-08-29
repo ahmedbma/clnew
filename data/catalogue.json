@@ -26706,7 +26706,9 @@
    "lengthAtMaxLoad_mm": 61.976,
    "maxLoad_N": 10.67573,
    "pkgQty": 6,
-   "price": "13.34"
+   "price": "13.34",
+   "maxTemp_C": 121.11,
+   "steelGrade": "Music-Wire Steel"
   },
   {
    "partNumber": "9657K82",
@@ -33112,5 +33114,5 @@
    "maxTemp_F": 339.99800000000005
   }
  ],
- "note": "Material properties for the rows McMaster labels \"Spring Steel\" are taken as music wire (ASTM A228). That is inferred from McMaster's own published max loads: assuming hard-drawn A227 puts 513 of 1,523 springs above their allowable stress at their own rating, which no vendor would publish; music wire leaves 25. Shear modulus is identical either way, so only the stress column moves."
+ "note": "Material properties for the rows McMaster labels \"Spring Steel\" are taken as music wire (ASTM A228). First inferred from McMaster's own published max loads -- assuming hard-drawn A227 puts 513 of 1,523 springs above allowable stress at their own rating, music wire leaves 25 -- and since confirmed on the McMaster product page for 9657K79, which states \"Steel Grade: Music-Wire Steel\". Shear modulus is identical either way, so only the stress column depends on this."
 }

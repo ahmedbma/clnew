@@ -90,13 +90,14 @@ rates exactly.
 | Mil. Spec. | 114 | keep their MS part number |
 | Plastic (Ultem PEI) | 22 | moulded, rectangular section |
 
-**One inference, stated plainly.** McMaster labels 947 of these "Spring Steel"
-without naming a grade. Their properties are taken as music wire (ASTM A228),
-inferred from McMaster's own published max loads rather than from any statement of
-theirs: assuming hard-drawn A227 puts 513 of 1,523 springs above allowable stress
-*at their own rating*, which no vendor would publish; music wire leaves 25. Shear
-modulus is identical either way, so rate, coil count and solid length are
-unaffected — only the stress column moves.
+**One inference, since confirmed.** McMaster labels 947 of these "Spring Steel"
+without naming a grade in the listing. Their properties are taken as music wire
+(ASTM A228). That was first inferred from McMaster's own published max loads —
+assuming hard-drawn A227 puts 513 of 1,523 springs above allowable stress *at their
+own rating*, which no vendor would publish; music wire leaves 25 — and is confirmed
+by the McMaster product page for 9657K79, which states `Steel Grade: Music-Wire
+Steel`. Shear modulus is identical either way, so rate, coil count and solid length
+never depended on it; only the stress column does.
 
 To update it: print the vendor's filtered listing to PDF, run the extractor, and
 commit the result. To add springs by hand instead, paste them into the Catalogue
