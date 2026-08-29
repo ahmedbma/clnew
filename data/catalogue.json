@@ -3115,7 +3115,12 @@
    "lengthAtMaxLoad_mm": 8.8392,
    "maxLoad_N": 57.82688,
    "pkgQty": 5,
-   "price": "4.83"
+   "price": "4.83",
+   "maxTemp_C": 121.11,
+   "steelGrade": "Music-Wire Steel",
+   "finish": "Zinc Plated",
+   "odTol_mm": 0.2032,
+   "rateTol": 0.08
   },
   {
    "partNumber": "9434K79",
@@ -9483,13 +9488,14 @@
    "rate_Npmm": 9.106595,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 41.7068,
    "wireDia_mm": 3.7592,
    "lengthAtMaxLoad_mm": 18.1864,
    "maxLoad_N": 280.23796,
    "pkgQty": 1,
-   "price": "7.42"
+   "price": "7.42",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "9657K101",
@@ -12033,13 +12039,14 @@
    "rate_Npmm": 41.154806,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 36.5252,
    "wireDia_mm": 6.35,
    "lengthAtMaxLoad_mm": 44.45,
    "maxLoad_N": 1267.74316,
    "pkgQty": 1,
-   "price": "16.44"
+   "price": "16.44",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K131",
@@ -12054,13 +12061,14 @@
    "rate_Npmm": 14.3604,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 39.4716,
    "wireDia_mm": 4.8768,
    "lengthAtMaxLoad_mm": 34.0614,
    "maxLoad_N": 578.26881,
    "pkgQty": 1,
-   "price": "9.04"
+   "price": "9.04",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "9657K254",
@@ -13274,13 +13282,14 @@
    "rate_Npmm": 213.654739,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 30.1752,
    "wireDia_mm": 9.525,
    "lengthAtMaxLoad_mm": 77.3938,
    "maxLoad_N": 4893.04378,
    "pkgQty": 1,
-   "price": "22.95"
+   "price": "22.95",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K384",
@@ -13295,13 +13304,14 @@
    "rate_Npmm": 82.309613,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 33.3756,
    "wireDia_mm": 7.9248,
    "lengthAtMaxLoad_mm": 69.342,
    "maxLoad_N": 2513.24521,
    "pkgQty": 1,
-   "price": "19.75"
+   "price": "19.75",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K125",
@@ -13316,13 +13326,14 @@
    "rate_Npmm": 4.203044,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 41.7068,
    "wireDia_mm": 3.7592,
    "lengthAtMaxLoad_mm": 28.4988,
    "maxLoad_N": 280.23796,
    "pkgQty": 1,
-   "price": "9.04"
+   "price": "9.04",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K171",
@@ -13337,13 +13348,14 @@
    "rate_Npmm": 145.355273,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 36.5252,
    "wireDia_mm": 9.525,
    "lengthAtMaxLoad_mm": 73.8124,
    "maxLoad_N": 3825.47059,
    "pkgQty": 1,
-   "price": "21.68"
+   "price": "21.68",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K161",
@@ -13358,13 +13370,14 @@
    "rate_Npmm": 23.642123,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 42.8752,
    "wireDia_mm": 6.35,
    "lengthAtMaxLoad_mm": 49.1998,
    "maxLoad_N": 1156.53762,
    "pkgQty": 1,
-   "price": "16.89"
+   "price": "16.89",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K154",
@@ -13379,13 +13392,14 @@
    "rate_Npmm": 11.908625,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 45.0596,
    "wireDia_mm": 5.2578,
    "lengthAtMaxLoad_mm": 36.8046,
    "maxLoad_N": 733.95657,
    "pkgQty": 1,
-   "price": "16.44"
+   "price": "16.44",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K194",
@@ -13400,13 +13414,14 @@
    "rate_Npmm": 229.416154,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 39.6748,
    "wireDia_mm": 11.1252,
    "lengthAtMaxLoad_mm": 77.6986,
    "maxLoad_N": 5204.41929,
    "pkgQty": 1,
-   "price": "26.79"
+   "price": "26.79",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K187",
@@ -13421,13 +13436,14 @@
    "rate_Npmm": 107.703004,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 42.8752,
    "wireDia_mm": 9.525,
    "lengthAtMaxLoad_mm": 69.0626,
    "maxLoad_N": 3313.9251,
    "pkgQty": 1,
-   "price": "26.85"
+   "price": "26.85",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K178",
@@ -13442,13 +13458,14 @@
    "rate_Npmm": 47.284246,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 46.0756,
    "wireDia_mm": 7.9248,
    "lengthAtMaxLoad_mm": 57.4548,
    "maxLoad_N": 1979.45862,
    "pkgQty": 1,
-   "price": "20.91"
+   "price": "20.91",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "9657K95",
@@ -13734,13 +13751,14 @@
    "rate_Npmm": 68.299466,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 49.2252,
    "wireDia_mm": 9.525,
    "lengthAtMaxLoad_mm": 75.0062,
    "maxLoad_N": 3380.64843,
    "pkgQty": 1,
-   "price": "24.49"
+   "price": "24.49",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K429",
@@ -13755,13 +13773,14 @@
    "rate_Npmm": 30.647196,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 52.4256,
    "wireDia_mm": 7.9248,
    "lengthAtMaxLoad_mm": 61.7982,
    "maxLoad_N": 1868.25308,
    "pkgQty": 1,
-   "price": "22.95"
+   "price": "22.95",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K239",
@@ -13776,13 +13795,14 @@
    "rate_Npmm": 215.406007,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 48.4124,
    "wireDia_mm": 12.7,
    "lengthAtMaxLoad_mm": 92.075,
    "maxLoad_N": 7784.38783,
    "pkgQty": 1,
-   "price": "43.23"
+   "price": "43.23",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K233",
@@ -13797,13 +13817,14 @@
    "rate_Npmm": 54.289319,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 54.7624,
    "wireDia_mm": 9.525,
    "lengthAtMaxLoad_mm": 72.6186,
    "maxLoad_N": 2846.86183,
    "pkgQty": 1,
-   "price": "30.20"
+   "price": "30.20",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K225",
@@ -13818,13 +13839,14 @@
    "rate_Npmm": 15.761415,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 59.5376,
    "wireDia_mm": 7.1374,
    "lengthAtMaxLoad_mm": 53.5178,
    "maxLoad_N": 1089.8143,
    "pkgQty": 1,
-   "price": "19.22"
+   "price": "19.22",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K262",
@@ -13839,13 +13861,14 @@
    "rate_Npmm": 168.121762,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 54.7624,
    "wireDia_mm": 12.7,
    "lengthAtMaxLoad_mm": 88.9,
    "maxLoad_N": 6049.5814,
    "pkgQty": 1,
-   "price": "41.99"
+   "price": "41.99",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K247",
@@ -13860,13 +13883,14 @@
    "rate_Npmm": 46.408611,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 61.1124,
    "wireDia_mm": 9.525,
    "lengthAtMaxLoad_mm": 66.675,
    "maxLoad_N": 2624.45075,
    "pkgQty": 1,
-   "price": "30.26"
+   "price": "30.26",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "9657K471",
@@ -13944,13 +13968,15 @@
    "rate_Npmm": 20.139586,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 36.5252,
    "wireDia_mm": 6.35,
    "lengthAtMaxLoad_mm": 76.2,
    "maxLoad_N": 1267.74316,
    "pkgQty": 1,
-   "price": "16.63"
+   "price": "16.63",
+   "maxTemp_C": 148.89,
+   "temperRating": "Spring"
   },
   {
    "partNumber": "96485K135",
@@ -13965,13 +13991,14 @@
    "rate_Npmm": 6.65482,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 39.4716,
    "wireDia_mm": 4.8768,
    "lengthAtMaxLoad_mm": 59.1312,
    "maxLoad_N": 578.26881,
    "pkgQty": 1,
-   "price": "9.43"
+   "price": "9.43",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K276",
@@ -13986,13 +14013,14 @@
    "rate_Npmm": 59.543124,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 64.262,
    "wireDia_mm": 11.1252,
    "lengthAtMaxLoad_mm": 87.4014,
    "maxLoad_N": 3647.54172,
    "pkgQty": 1,
-   "price": "34.38"
+   "price": "34.38",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K269",
@@ -14007,13 +14035,14 @@
    "rate_Npmm": 30.647196,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 67.4624,
    "wireDia_mm": 9.525,
    "lengthAtMaxLoad_mm": 73.8124,
    "maxLoad_N": 2268.59302,
    "pkgQty": 1,
-   "price": "29.31"
+   "price": "29.31",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K291",
@@ -14028,13 +14057,14 @@
    "rate_Npmm": 28.020294,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 73.8124,
    "wireDia_mm": 9.525,
    "lengthAtMaxLoad_mm": 66.675,
    "maxLoad_N": 2313.07524,
    "pkgQty": 1,
-   "price": "29.31"
+   "price": "29.31",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K331",
@@ -14049,13 +14079,14 @@
    "rate_Npmm": 229.416154,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 67.4624,
    "wireDia_mm": 15.875,
    "lengthAtMaxLoad_mm": 107.1372,
    "maxLoad_N": 9830.56977,
    "pkgQty": 1,
-   "price": "57.51"
+   "price": "57.51",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K318",
@@ -14070,13 +14101,14 @@
    "rate_Npmm": 79.68271,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 73.8124,
    "wireDia_mm": 12.7,
    "lengthAtMaxLoad_mm": 88.9,
    "maxLoad_N": 4804.07934,
    "pkgQty": 1,
-   "price": "51.27"
+   "price": "51.27",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K312",
@@ -14091,13 +14123,14 @@
    "rate_Npmm": 29.771562,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 79.248,
    "wireDia_mm": 9.9822,
    "lengthAtMaxLoad_mm": 66.1416,
    "maxLoad_N": 2379.79856,
    "pkgQty": 1,
-   "price": "33.45"
+   "price": "33.45",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K339",
@@ -14112,13 +14145,14 @@
    "rate_Npmm": 28.895928,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 84.9376,
    "wireDia_mm": 10.3124,
    "lengthAtMaxLoad_mm": 67.0306,
    "maxLoad_N": 2335.31635,
    "pkgQty": 1,
-   "price": "35.36"
+   "price": "35.36",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K481",
@@ -14133,13 +14167,14 @@
    "rate_Npmm": 167.246128,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 80.1624,
    "wireDia_mm": 15.875,
    "lengthAtMaxLoad_mm": 99.2124,
    "maxLoad_N": 8451.62107,
    "pkgQty": 1,
-   "price": "68.17"
+   "price": "68.17",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K432",
@@ -14154,13 +14189,14 @@
    "rate_Npmm": 49.035514,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 99.2124,
    "wireDia_mm": 12.7,
    "lengthAtMaxLoad_mm": 73.025,
    "maxLoad_N": 3692.02394,
    "pkgQty": 1,
-   "price": "53.50"
+   "price": "53.50",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K152",
@@ -14175,13 +14211,14 @@
    "rate_Npmm": 95.444125,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 30.1752,
    "wireDia_mm": 9.525,
    "lengthAtMaxLoad_mm": 148.8186,
    "maxLoad_N": 4893.04378,
    "pkgQty": 1,
-   "price": "29.23"
+   "price": "29.23",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K386",
@@ -14196,13 +14233,14 @@
    "rate_Npmm": 37.65227,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 33.3756,
    "wireDia_mm": 7.9248,
    "lengthAtMaxLoad_mm": 132.7404,
    "maxLoad_N": 2513.24521,
    "pkgQty": 1,
-   "price": "24.49"
+   "price": "24.49",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K174",
@@ -14217,13 +14255,14 @@
    "rate_Npmm": 64.796929,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 36.5252,
    "wireDia_mm": 9.525,
    "lengthAtMaxLoad_mm": 141.4526,
    "maxLoad_N": 3825.47059,
    "pkgQty": 1,
-   "price": "30.20"
+   "price": "30.20",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K164",
@@ -14238,13 +14277,14 @@
    "rate_Npmm": 10.857864,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 42.8752,
    "wireDia_mm": 6.35,
    "lengthAtMaxLoad_mm": 92.075,
    "maxLoad_N": 1156.53762,
    "pkgQty": 1,
-   "price": "20.91"
+   "price": "20.91",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K156",
@@ -14259,13 +14299,14 @@
    "rate_Npmm": 5.604059,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 45.0596,
    "wireDia_mm": 5.2578,
    "lengthAtMaxLoad_mm": 65.7098,
    "maxLoad_N": 733.95657,
    "pkgQty": 1,
-   "price": "16.89"
+   "price": "16.89",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K197",
@@ -14280,13 +14321,14 @@
    "rate_Npmm": 100.69793,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 39.6748,
    "wireDia_mm": 11.1252,
    "lengthAtMaxLoad_mm": 148.8186,
    "maxLoad_N": 5204.41929,
    "pkgQty": 1,
-   "price": "36.40"
+   "price": "36.40",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K191",
@@ -14301,13 +14343,14 @@
    "rate_Npmm": 48.15988,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 42.8752,
    "wireDia_mm": 9.525,
    "lengthAtMaxLoad_mm": 130.9624,
    "maxLoad_N": 3313.9251,
    "pkgQty": 1,
-   "price": "29.31"
+   "price": "29.31",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K182",
@@ -14322,13 +14365,14 @@
    "rate_Npmm": 21.890854,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 46.0756,
    "wireDia_mm": 7.9248,
    "lengthAtMaxLoad_mm": 106.9848,
    "maxLoad_N": 1979.45862,
    "pkgQty": 1,
-   "price": "26.85"
+   "price": "26.85",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K222",
@@ -14343,13 +14387,14 @@
    "rate_Npmm": 112.081175,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 44.5008,
    "wireDia_mm": 11.8872,
    "lengthAtMaxLoad_mm": 141.4526,
    "maxLoad_N": 6538.88577,
    "pkgQty": 1,
-   "price": "45.74"
+   "price": "45.74",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K214",
@@ -14364,13 +14409,14 @@
    "rate_Npmm": 40.279172,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 49.2252,
    "wireDia_mm": 9.525,
    "lengthAtMaxLoad_mm": 114.3,
    "maxLoad_N": 3380.64843,
    "pkgQty": 1,
-   "price": "30.17"
+   "price": "30.17",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K205",
@@ -14385,13 +14431,14 @@
    "rate_Npmm": 18.388318,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 52.4256,
    "wireDia_mm": 7.9248,
    "lengthAtMaxLoad_mm": 93.1164,
    "maxLoad_N": 1868.25308,
    "pkgQty": 1,
-   "price": "24.49"
+   "price": "24.49",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K242",
@@ -14406,13 +14453,14 @@
    "rate_Npmm": 121.71315,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 48.4124,
    "wireDia_mm": 12.7,
    "lengthAtMaxLoad_mm": 142.875,
    "maxLoad_N": 7784.38783,
    "pkgQty": 1,
-   "price": "51.27"
+   "price": "51.27",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K236",
@@ -14427,13 +14475,14 @@
    "rate_Npmm": 32.398465,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 54.7624,
    "wireDia_mm": 9.525,
    "lengthAtMaxLoad_mm": 109.5248,
    "maxLoad_N": 2846.86183,
    "pkgQty": 1,
-   "price": "30.76"
+   "price": "30.76",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K397",
@@ -14448,13 +14497,14 @@
    "rate_Npmm": 9.281722,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 59.5376,
    "wireDia_mm": 7.1374,
    "lengthAtMaxLoad_mm": 80.2894,
    "maxLoad_N": 1089.8143,
    "pkgQty": 1,
-   "price": "24.49"
+   "price": "24.49",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K249",
@@ -14469,13 +14519,14 @@
    "rate_Npmm": 27.144659,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 61.1124,
    "wireDia_mm": 9.525,
    "lengthAtMaxLoad_mm": 99.9998,
    "maxLoad_N": 2624.45075,
    "pkgQty": 1,
-   "price": "30.76"
+   "price": "30.76",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K229",
@@ -14490,13 +14541,14 @@
    "rate_Npmm": 7.355327,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 59.5376,
    "wireDia_mm": 7.1374,
    "lengthAtMaxLoad_mm": 98.1456,
    "maxLoad_N": 1089.8143,
    "pkgQty": 1,
-   "price": "24.49"
+   "price": "24.49",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K265",
@@ -14511,13 +14563,14 @@
    "rate_Npmm": 74.428905,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 54.7624,
    "wireDia_mm": 12.7,
    "lengthAtMaxLoad_mm": 168.275,
    "maxLoad_N": 6049.5814,
    "pkgQty": 1,
-   "price": "57.26"
+   "price": "57.26",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K259",
@@ -14532,13 +14585,14 @@
    "rate_Npmm": 41.154806,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 57.912,
    "wireDia_mm": 11.1252,
    "lengthAtMaxLoad_mm": 144.2974,
    "maxLoad_N": 4292.53386,
    "pkgQty": 1,
-   "price": "41.86"
+   "price": "41.86",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K284",
@@ -14553,13 +14607,14 @@
    "rate_Npmm": 67.423832,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 59.5376,
    "wireDia_mm": 13.4874,
    "lengthAtMaxLoad_mm": 195.58,
    "maxLoad_N": 6983.70794,
    "pkgQty": 1,
-   "price": "55.78"
+   "price": "55.78",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K272",
@@ -14574,13 +14629,14 @@
    "rate_Npmm": 14.3604,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 67.4624,
    "wireDia_mm": 9.525,
    "lengthAtMaxLoad_mm": 138.0998,
    "maxLoad_N": 2268.59302,
    "pkgQty": 1,
-   "price": "39.86"
+   "price": "39.86",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K293",
@@ -14595,13 +14651,15 @@
    "rate_Npmm": 13.309639,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 73.8124,
    "wireDia_mm": 9.525,
    "lengthAtMaxLoad_mm": 196.4436,
    "maxLoad_N": 2313.07524,
    "pkgQty": 1,
-   "price": "37.65"
+   "price": "37.65",
+   "maxTemp_C": 148.89,
+   "temperRating": "Spring"
   },
   {
    "partNumber": "96485K322",
@@ -14616,13 +14674,14 @@
    "rate_Npmm": 35.901001,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 73.8124,
    "wireDia_mm": 12.7,
    "lengthAtMaxLoad_mm": 165.1,
    "maxLoad_N": 4804.07934,
    "pkgQty": 1,
-   "price": "55.19"
+   "price": "55.19",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K315",
@@ -14637,13 +14696,14 @@
    "rate_Npmm": 13.83502,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 79.248,
    "wireDia_mm": 9.9822,
    "lengthAtMaxLoad_mm": 119.7864,
    "maxLoad_N": 2379.79856,
    "pkgQty": 1,
-   "price": "45.98"
+   "price": "45.98",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K342",
@@ -14658,13 +14718,14 @@
    "rate_Npmm": 13.309639,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 84.9376,
    "wireDia_mm": 10.3124,
    "lengthAtMaxLoad_mm": 121.158,
    "maxLoad_N": 2335.31635,
    "pkgQty": 1,
-   "price": "45.98"
+   "price": "45.98",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K455",
@@ -14679,13 +14740,14 @@
    "rate_Npmm": 57.791856,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 92.8624,
    "wireDia_mm": 15.875,
    "lengthAtMaxLoad_mm": 166.7002,
    "maxLoad_N": 7428.5301,
    "pkgQty": 1,
-   "price": "90.34"
+   "price": "90.34",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "96485K436",
@@ -14700,13 +14762,14 @@
    "rate_Npmm": 21.890854,
    "family": "Compression Springs",
    "provenance": "McMaster-Carr catalogue PDF, inch / straight compression springs, retrieved 2026-08-29",
-   "materialKey": "music-wire",
+   "materialKey": "oil-tempered",
    "id_mm": 99.2124,
    "wireDia_mm": 12.7,
    "lengthAtMaxLoad_mm": 130.175,
    "maxLoad_N": 3692.02394,
    "pkgQty": 1,
-   "price": "63.43"
+   "price": "63.43",
+   "maxTemp_C": 148.89
   },
   {
    "partNumber": "9622K51",
@@ -23957,7 +24020,10 @@
    "maxLoad_N": 12.89984,
    "odTol_mm": 0.1016,
    "rateTol": 0.05,
-   "pkgQty": 3
+   "pkgQty": 3,
+   "maxTemp_C": 121.11,
+   "steelGrade": "Music-Wire Steel",
+   "finish": "Zinc Plated"
   },
   {
    "partNumber": "9001T35",
@@ -24243,7 +24309,10 @@
    "maxLoad_N": 21.79629,
    "odTol_mm": 0.1016,
    "rateTol": 0.05,
-   "pkgQty": 5
+   "pkgQty": 5,
+   "maxTemp_C": 121.11,
+   "steelGrade": "Music-Wire Steel",
+   "finish": "Zinc Plated"
   },
   {
    "partNumber": "9001T41",
@@ -26729,7 +26798,9 @@
    "lengthAtMaxLoad_mm": 50.038,
    "maxLoad_N": 2.66893,
    "pkgQty": 12,
-   "price": "20.78"
+   "price": "20.78",
+   "maxTemp_C": 121.11,
+   "steelGrade": "Music-Wire Steel"
   },
   {
    "partNumber": "9637K44",
@@ -33114,5 +33185,5 @@
    "maxTemp_F": 339.99800000000005
   }
  ],
- "note": "Material properties for the rows McMaster labels \"Spring Steel\" are taken as music wire (ASTM A228). First inferred from McMaster's own published max loads -- assuming hard-drawn A227 puts 513 of 1,523 springs above allowable stress at their own rating, music wire leaves 25 -- and since confirmed on the McMaster product page for 9657K79, which states \"Steel Grade: Music-Wire Steel\". Shear modulus is identical either way, so only the stress column depends on this."
+ "note": "Material properties for the rows McMaster labels \"Spring Steel\" are taken as music wire (ASTM A228). First inferred from McMaster's own published max loads -- assuming hard-drawn A227 puts 513 of 1,523 springs above allowable stress at their own rating, music wire leaves 25 -- and since confirmed on the McMaster product page for 9657K79, which states \"Steel Grade: Music-Wire Steel\". The 56 springs in the 96485K series are the exception: their product pages name no steel grade, rate to 300 F where music wire and hard-drawn reach only 250 F, and run to 0.625 in wire, far beyond the range music wire is drawn in. They are taken as oil-tempered A229, the 300 F grade. Shear modulus is identical for all these grades, so rate, coil count and solid length never depend on any of it; only stress does."
 }

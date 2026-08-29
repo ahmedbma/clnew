@@ -96,8 +96,16 @@ without naming a grade in the listing. Their properties are taken as music wire
 assuming hard-drawn A227 puts 513 of 1,523 springs above allowable stress *at their
 own rating*, which no vendor would publish; music wire leaves 25 — and is confirmed
 by the McMaster product page for 9657K79, which states `Steel Grade: Music-Wire
-Steel`. Shear modulus is identical either way, so rate, coil count and solid length
-never depended on it; only the stress column does.
+Steel`, and by three more product pages (`9434K82`, `9001T42`, `9001T25`, `9657K82`).
+
+The 56 springs of the **96485K** series are the exception. Their pages name no steel
+grade, rate to 300 °F where music wire and hard-drawn reach only 250 °F, and the
+series runs to 0.625 in wire — far beyond the range music wire is drawn in. They
+are taken as oil-tempered A229, the 300 °F grade.
+
+Shear modulus is identical across all of these grades, so rate, coil count, solid
+length and every force figure never depended on any of it. Only the stress column
+does.
 
 To update it: print the vendor's filtered listing to PDF, run the extractor, and
 commit the result. To add springs by hand instead, paste them into the Catalogue
