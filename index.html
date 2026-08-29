@@ -8,7 +8,13 @@
 <meta name="description" content="Work out what force a stock compression spring gives at what length, and search a vendor catalogue backwards from the force you need.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<!-- Loaded without blocking render: on a network that cannot reach Google
+     Fonts the page must appear at once in the fallback stack, not hang
+     until the request times out. -->
+<link rel="stylesheet" media="print" onload="this.media='all';this.onload=null"
+  href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<noscript><link rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&family=IBM+Plex+Sans:wght@400;500;600&display=swap"></noscript>
 <style>
 /* Light is the base layer; dark is redefined twice so both the OS default
    (unstamped) and an explicit data-theme choice resolve correctly. */
@@ -277,6 +283,9 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
           <select id="f-material"><option value="">any</option></select></div>
         <div><label for="f-ends">End type</label>
           <select id="f-ends"><option value="">any</option></select></div>
+        <div><label for="f-family">Product family</label>
+          <select id="f-family"><option value="">any</option></select>
+          <div class="hint">Cut-to-length stock is priced by the coil and cut to suit.</div></div>
         <div><label for="f-shape">Coil shape</label>
           <select id="f-shape">
             <option value="">any</option>

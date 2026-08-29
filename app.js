@@ -11,6 +11,11 @@ const STORE_KEY = 'springcalc.catalog.v1';
 // Bumping this clears every browser's stored springs once, on next load.
 // Used to wipe the synthetic demo data the tool used to ship with.
 const RESET_TOKEN = '2026-08-27-clean-slate';
+// Drawing a few thousand table rows costs seconds of layout for a list nobody
+// reads to the end. The engine handles the whole catalogue; only the visible
+// slice is rendered.
+const MAX_RESULT_ROWS = 100;
+const MAX_CATALOGUE_ROWS = 200;
 
 const state = {
   lengthUnit: 'in',
@@ -133,6 +138,16 @@ function saveStore() {
   return state.storeError;
 }
 
+/** Populate the family filter from whatever is actually loaded. */
+function refreshFamilies() {
+  const sel = $('f-family');
+  const chosen = sel.value;
+  const names = [...new Set(state.catalogue.map((s) => s.family).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">any</option>';
+  names.forEach((n) => sel.append(new Option(n, n)));
+  if (names.includes(chosen)) sel.value = chosen;
+}
+
 /** The catalogue everything else reads: shipped rows, minus dismissals, with local ones on top. */
 function rebuildCatalogue() {
   const byKey = new Map();
@@ -143,6 +158,7 @@ function rebuildCatalogue() {
   }
   for (const spring of state.local) byKey.set(springKey(spring), { ...spring, _origin: 'local' });
   state.catalogue = [...byKey.values()];
+  refreshFamilies();
 }
 
 /** Load the catalogue committed alongside the site. Absent or empty is fine. */
@@ -433,6 +449,7 @@ function findRequirements() {
     minTemperature_C: readTemp('f-mintemp', 'f-temp-u'),
     straightOnly: $('f-shape').value === 'straight',
     ends: $('f-ends').value ? [$('f-ends').value] : null,
+    families: $('f-family').value ? [$('f-family').value] : null,
     positionTol_mm: readLen('f-postol') ?? sm.inToMm(0.010),
     rateTol: (rawNum('f-ratetol') ?? 10) / 100,
     minDeflection_mm: readLen('f-mintravel'),
@@ -511,13 +528,14 @@ function renderResults(req) {
   const hits = sm.searchCatalog(state.catalogue, req);
   state.results = hits;
   const okCount = hits.filter((h) => h.ok).length;
+  const shown = hits.slice(0, MAX_RESULT_ROWS);
 
-  const rows = hits.map((h, i) => {
+  const rows = shown.map((h, i) => {
     const w = h.evaluation.working;
     const sev = severity(w?.travelUsedFraction);
     return `<tr data-i="${i}" class="${h.ok ? '' : 'rejected'}">
       <td class="l">${h.ok ? badge(sev, sev === 'ok' ? 'fits' : sev === 'warn' ? 'tight' : 'at limit') : badge('bad', 'no')}</td>
-      <td class="l">${esc(springName(h.spring))}</td>
+      <td class="l">${esc(springName(h.spring))}${/cut-to-length/i.test(h.spring.family || '') ? ' <span class="pill warn">cut to length</span>' : ''}</td>
       <td class="num">${Lnum(h.spring.od_mm)}</td>
       <td class="num">${Lnum(h.spring.freeLength_mm)}</td>
       <td class="num">${nf(sm.nPerMmToLbfPerIn(h.spring.rate_Npmm), 2)}</td>
@@ -536,6 +554,8 @@ function renderResults(req) {
         <th>rate lbf/in</th><th>compress ${Lunit()}</th><th>installed ${Lunit()}</th>
         <th>travel used</th><th>force band</th><th>stress</th><th class="l">why not</th></tr></thead>
       <tbody>${rows}</tbody></table></div>
+    ${hits.length > shown.length ? `<p class="hint">Showing the best ${shown.length} of ${hits.length}, ranked by
+      &ldquo;${esc($('f-sort').selectedOptions[0].textContent)}&rdquo;. Narrow it down above to see the rest.</p>` : ''}
     <p class="hint">Click a row for the full working-point report. &ldquo;Force band&rdquo; is what you
       actually get once rate tolerance and assembly position error are counted &mdash; the reason a softer
       spring compressed further beats a stiff one nudged slightly.</p>`;
@@ -589,7 +609,7 @@ function runFind() {
 const OPTIONAL_NUMBERS = ['f-minod', 'f-maxod', 'f-minid', 'f-maxid', 'f-minwire', 'f-maxwire',
   'f-minfree', 'f-maxfree', 'f-maxinst', 'f-maxsolid', 'f-minrate', 'f-maxrate', 'f-minload',
   'f-mintravel', 'f-maxtravel', 'f-mintemp', 'f-postol', 'f-ratetol'];
-const OPTIONAL_SELECTS = { 'f-material': '', 'f-ends': '', 'f-shape': '', 'f-sort': 'robustness' };
+const OPTIONAL_SELECTS = { 'f-material': '', 'f-ends': '', 'f-shape': '', 'f-family': '', 'f-sort': 'robustness' };
 
 /**
  * Inputs whose meaning depends on the length unit. With one diameter box the
@@ -792,7 +812,8 @@ function renderCatalogue() {
     return;
   }
 
-  const rows = state.catalogue.map((s) => `<tr>
+  const shownRows = state.catalogue.slice(0, MAX_CATALOGUE_ROWS);
+  const rows = shownRows.map((s) => `<tr>
     <td class="l">${s._origin === 'shared' ? badge('ok', 'shipped') : badge('warn', 'yours')}</td>
     <td class="l">${esc(springName(s))}</td>
     <td class="l muted">${esc(s.vendor || '')}</td>
@@ -813,7 +834,10 @@ function renderCatalogue() {
       <thead><tr><th class="l">source</th><th class="l">part</th><th class="l">vendor</th>
         <th>OD ${Lunit()}</th><th>wire ${Lunit()}</th><th>free ${Lunit()}</th><th>rate lbf/in</th>
         <th>solid ${Lunit()}</th><th>max load</th><th class="l"></th><th class="l"></th></tr></thead>
-      <tbody>${rows}</tbody></table></div>${hiddenNote}`;
+      <tbody>${rows}</tbody></table></div>
+    ${state.catalogue.length > shownRows.length
+      ? `<p class="hint">Listing the first ${shownRows.length}. All ${state.catalogue.length} are searched
+         &mdash; this table is just a window on them.</p>` : ''}${hiddenNote}`;
 
   box.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => {
     const key = b.dataset.del;

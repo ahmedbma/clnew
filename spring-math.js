@@ -96,6 +96,12 @@ export const MATERIALS = {
     sut: [{ dMax: 10.0, A: 2065, m: 0.146, approx: true }],
     aliases: ['17-7 ph', '17-7ph', '17-7 stainless', '631'],
   },
+  'brass': {
+    name: 'Spring brass',
+    G_GPa: 34.5, E_GPa: 110.0, tauFrac: 0.35, tauFracSet: 0.50,
+    sut: [{ dMax: 7.5, A: 800, m: 0, approx: true }],
+    aliases: ['brass', 'cartridge brass', 'spring brass'],
+  },
   'phosphor-bronze': {
     name: 'Phosphor bronze (ASTM B159)',
     G_GPa: 41.4, E_GPa: 103.4, tauFrac: 0.35, tauFracSet: 0.50,
@@ -338,9 +344,16 @@ export function normalizeSpring(raw) {
   const derived = [];
   const warnings = [];
 
-  s.materialKey = s.materialKey || resolveMaterial(s.material) || DEFAULT_MATERIAL;
-  if (s.material && !resolveMaterial(s.material)) {
-    warnings.push(`Material "${s.material}" not recognised; assumed ${getMaterial(s.materialKey).name}.`);
+  // A material named but not recognised is left unknown: inventing properties
+  // for it would put a confident wrong stress number on the screen. A material
+  // simply not stated falls back to the default, which is only ever an
+  // assumption about steel, and is declared as one.
+  s.materialKey = s.materialKey || resolveMaterial(s.material) || (s.material ? null : DEFAULT_MATERIAL);
+  if (s.material && !s.materialKey) {
+    warnings.push(`Material "${s.material}" is not one the calculator has properties for, so stress is not `
+      + 'checked and coil count is not worked out. Everything that follows from the published rate still holds.');
+  } else if (!s.material) {
+    derived.push('materialKey');
   }
   s.endsKey = s.endsKey || resolveEnds(s.ends) || null;
   if (!s.endsKey) {
@@ -348,35 +361,52 @@ export function normalizeSpring(raw) {
     if (s.ends) warnings.push(`End type "${s.ends}" not recognised; assumed closed and ground.`);
     else derived.push('endsKey');
   }
-  const mat = getMaterial(s.materialKey);
-  s.G_GPa = num(s.G_GPa) ?? mat.G_GPa;
+  s.G_GPa = num(s.G_GPa) ?? (s.materialKey ? MATERIALS[s.materialKey].G_GPa : null);
 
   // --- wire / diameters: any two of OD, ID, wire dia give the third.
+  const rectangularWire = num(s.wireWidth_mm) != null || num(s.wireThickness_mm) != null;
   let od = num(s.od_mm), id = num(s.id_mm), d = num(s.wireDia_mm);
-  if (d == null && od != null && id != null) { d = (od - id) / 2; derived.push('wireDia_mm'); }
+  // (OD - ID)/2 is the radial thickness, which is only the wire diameter when
+  // the wire is round. Deriving it for rectangular wire would feed a wrong
+  // number into the round-wire rate equation.
+  if (d == null && od != null && id != null && !rectangularWire) { d = (od - id) / 2; derived.push('wireDia_mm'); }
   if (id == null && od != null && d != null) { id = od - 2 * d; derived.push('id_mm'); }
   if (od == null && id != null && d != null) { od = id + 2 * d; derived.push('od_mm'); }
   s.od_mm = od; s.id_mm = id; s.wireDia_mm = d;
 
-  if (od == null || d == null) {
-    return { ...s, derived, warnings, incomplete: true,
-      missing: [od == null && 'outside diameter', d == null && 'wire diameter'].filter(Boolean) };
+  // Rectangular-wire and moulded springs have no round wire diameter, and an
+  // unknown alloy has no shear modulus. Their published rate still gives exact
+  // force at length; only what the rate equation would infer is out of reach.
+  const roundWire = od != null && d != null && s.materialKey != null;
+  // Cut-to-length stock is sold by the metre and cut to suit; its published
+  // rate belongs to the full uncut length, and cutting it changes the rate.
+  if (/cut-to-length/i.test(s.family || '')) {
+    warnings.push('Sold as cut-to-length stock. The published rate is for the full uncut length - '
+      + 'cutting it shortens the coil count and stiffens the spring in proportion.');
+  }
+  if (rectangularWire) {
+    warnings.push('Rectangular wire, so coil count, solid length and stress are not worked out. Force at length comes straight from the published rate.');
   }
 
-  s.meanDia_mm = meanDiameter(od, d);
-  s.springIndex = springIndex(s.meanDia_mm, d);
+  if (od != null && d != null) {
+    s.meanDia_mm = meanDiameter(od, d);
+    s.springIndex = springIndex(s.meanDia_mm, d);
+  }
   if (s.nonLinearShape) {
     warnings.push(`Listed as "${s.nonLinearShape}" rather than a straight cylindrical spring. `
       + `Conical, barrel and hourglass springs stiffen as their coils close, so the constant rate `
       + `this calculator assumes will understate the force near the end of travel.`);
   }
-  if (s.springIndex < 4) warnings.push(`Spring index C=${s.springIndex.toFixed(1)} is below 4 - tightly wound, high stress concentration, hard to manufacture.`);
-  if (s.springIndex > 14) warnings.push(`Spring index C=${s.springIndex.toFixed(1)} is above 14 - loose, prone to tangling and buckling.`);
+  if (s.springIndex != null && s.springIndex < 4) warnings.push(`Spring index C=${s.springIndex.toFixed(1)} is below 4 - tightly wound, high stress concentration, hard to manufacture.`);
+  if (s.springIndex != null && s.springIndex > 14) warnings.push(`Spring index C=${s.springIndex.toFixed(1)} is above 14 - loose, prone to tangling and buckling.`);
 
   // --- coils <-> rate: whichever is missing comes from the other.
   let Na = num(s.activeCoils), Nt = num(s.totalCoils), k = num(s.rate_Npmm);
   if (Na == null && Nt != null) { Na = activeFromTotal(Nt, s.endsKey); derived.push('activeCoils'); }
-  if (Na != null && k == null) {
+  if (!roundWire) {
+    // Nothing to invert without a round wire diameter and a shear modulus.
+    s.activeCoils = Na; s.totalCoils = Nt; s.rate_Npmm = k;
+  } else if (Na != null && k == null) {
     k = rateFromGeometry({ G_GPa: s.G_GPa, d_mm: d, D_mm: s.meanDia_mm, activeCoils: Na });
     derived.push('rate_Npmm');
   } else if (Na == null && k != null) {
@@ -390,19 +420,24 @@ export function normalizeSpring(raw) {
       warnings.push(`Published rate and coil geometry disagree by ${(s.rateCheck.error * 100).toFixed(0)}% - check the data.`);
     }
   }
-  if (Nt == null && Na != null) { Nt = totalFromActive(Na, s.endsKey); derived.push('totalCoils'); }
-  s.activeCoils = Na; s.totalCoils = Nt; s.rate_Npmm = k;
-
-  if (k == null) {
-    return { ...s, derived, warnings, incomplete: true,
-      missing: ['spring rate (or coil count, to derive it)'] };
+  if (roundWire) {
+    if (Nt == null && Na != null) { Nt = totalFromActive(Na, s.endsKey); derived.push('totalCoils'); }
+    s.activeCoils = Na; s.totalCoils = Nt; s.rate_Npmm = k;
   }
+
+  // The rate and the free length are what the tool cannot work without.
+  const missing = [
+    s.rate_Npmm == null && 'spring rate (or coil count and material, to derive it)',
+    num(s.freeLength_mm) == null && 'free length',
+  ].filter(Boolean);
+  if (missing.length) return { ...s, derived, warnings, incomplete: true, missing };
+  k = s.rate_Npmm;
   if (Na != null && Na < 2) warnings.push(`Only ${Na.toFixed(1)} active coils - the rate equation is unreliable this low.`);
 
   // --- lengths and travel
   let L0 = num(s.freeLength_mm);
   let Ls = num(s.solidLength_mm);
-  if (Ls == null && Nt != null) { Ls = solidLength(Nt, d, s.endsKey); derived.push('solidLength_mm'); }
+  if (Ls == null && Nt != null && roundWire) { Ls = solidLength(Nt, d, s.endsKey); derived.push('solidLength_mm'); }
   s.solidLength_mm = Ls;
   s.freeLength_mm = L0;
 
@@ -505,16 +540,22 @@ export function evaluate(springIn, opts = {}) {
 
   const k = s.rate_Npmm;
   const C = s.springIndex;
-  const Ks = staticShearFactor(C);
-  const Kw = wahlFactor(C);
-  const allow = allowableShearStress(s.materialKey, s.wireDia_mm, { setRemoved });
+  // Stress needs a round wire and a known alloy; without either, it is left
+  // unreported rather than computed from a stand-in.
+  const canStress = C != null && s.wireDia_mm != null && s.materialKey != null;
+  const Ks = canStress ? staticShearFactor(C) : null;
+  const Kw = canStress ? wahlFactor(C) : null;
+  const allow = canStress ? allowableShearStress(s.materialKey, s.wireDia_mm, { setRemoved }) : null;
   out.allowable = allow;
   out.factors = { Ks, Kw, springIndex: C };
 
   const stressAt = (F) => {
-    const tauStatic = shearStress({ force_N: F, D_mm: s.meanDia_mm, d_mm: s.wireDia_mm, factor: Ks });
-    const tauCyclic = shearStress({ force_N: F, D_mm: s.meanDia_mm, d_mm: s.wireDia_mm, factor: Kw });
-    return { tauStatic_MPa: tauStatic, tauCyclic_MPa: tauCyclic, utilisation: tauStatic / allow.tauAllow_MPa };
+    if (!canStress) return { tauStatic_MPa: null, tauCyclic_MPa: null, utilisation: null };
+    return {
+      tauStatic_MPa: shearStress({ force_N: F, D_mm: s.meanDia_mm, d_mm: s.wireDia_mm, factor: Ks }),
+      tauCyclic_MPa: shearStress({ force_N: F, D_mm: s.meanDia_mm, d_mm: s.wireDia_mm, factor: Kw }),
+      utilisation: shearStress({ force_N: F, D_mm: s.meanDia_mm, d_mm: s.wireDia_mm, factor: Ks }) / allow.tauAllow_MPa,
+    };
   };
 
   if (s.travelToSolid_mm != null) {
@@ -530,7 +571,7 @@ export function evaluate(springIn, opts = {}) {
     };
   }
 
-  if (s.freeLength_mm != null && s.meanDia_mm != null) {
+  if (s.freeLength_mm != null && s.meanDia_mm != null && s.materialKey != null) {
     out.buckling = bucklingAnalysis({
       freeLength_mm: s.freeLength_mm, D_mm: s.meanDia_mm,
       materialKey: s.materialKey, endCondition,
@@ -585,7 +626,7 @@ export function evaluate(springIn, opts = {}) {
       work.installedLength_mm < s.solidLength_mm) {
     reasons.push('Working point is past the solid length - the spring is fully collapsed before it reaches this force.');
   }
-  if (stress.utilisation > 1) {
+  if (stress.utilisation != null && stress.utilisation > 1) {
     reasons.push(`Shear stress at the working load is ${(stress.utilisation * 100).toFixed(0)}% of allowable.`);
   }
   if (out.buckling && !out.buckling.unconditionallyStable &&
@@ -627,7 +668,7 @@ export function searchCatalog(springs, req = {}) {
     minRatedLoad_N = null,
     minTemperature_C = null,
     straightOnly = false,
-    materials = null, ends = null,
+    materials = null, ends = null, families = null,
     minTravelHeadroom_mm = 0,
     minDeflection_mm = null,
     maxTravelUsedFraction = 1,
@@ -664,6 +705,7 @@ export function searchCatalog(springs, req = {}) {
     if (straightOnly && s.nonLinearShape) rejected.push(`Listed as ${s.nonLinearShape}, not a straight cylindrical spring.`);
     if (materials && materials.length && !materials.includes(s.materialKey)) rejected.push('Material excluded.');
     if (ends && ends.length && !ends.includes(s.endsKey)) rejected.push('End type excluded.');
+    if (families && families.length && !families.includes(s.family)) rejected.push(`${s.family || 'Unlisted product family'} excluded.`);
 
     const ev = evaluate(s, { targetForce_N, ...evalOpts });
     if (!ev.feasible) rejected.push(...ev.reasons);

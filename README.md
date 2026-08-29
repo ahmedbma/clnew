@@ -66,13 +66,33 @@ maximum, because diameter is only filtered as an upper bound.
 
 ## The shared catalogue
 
-`data/catalogue.json` is the list every visitor sees on their first visit, in any
-browser, with nothing to paste. It ships **empty** — no verified vendor data has
-been added to it yet.
+`data/catalogue.json` carries **1,566 McMaster-Carr straight compression springs,
+inch sizes** — the vendor's full filtered listing, extracted from their own
+catalogue PDF on 2026-08-29. Every visitor gets them on first load, in any
+browser, with nothing to paste. Each row keeps its part number and a link back to
+the vendor page.
 
-To fill it: paste a vendor table into the Catalogue tab, check the results, click
-**Download as JSON**, and commit that file over `data/catalogue.json`. Everyone
-gets it on their next visit.
+The listing is five product families printed with **different columns**, so
+`tools/extract-mcmaster-pdf.py` parses each with its own pattern — one pattern
+across all of them would silently shift values into the wrong fields. Every
+parsed row is then checked against the vendor's own arithmetic: rate x (free
+length − compressed length at max load) must reproduce the published max load.
+1,496 of the 1,504 checkable rows agree within 12%; the 8 that do not were
+inspected by hand against the source and are vendor inconsistencies, not parse
+errors. Coil counts derived from the published rates round-trip back to those
+rates exactly.
+
+| Family | Rows | Note |
+|---|---|---|
+| Compression Springs | 1,125 | finished parts |
+| Cut-to-Length | 166 | sold as stock; cutting changes the rate, so each is flagged |
+| Precision | 139 | carry their own OD and rate tolerances |
+| Mil. Spec. | 114 | keep their MS part number |
+| Plastic (Ultem PEI) | 22 | moulded, rectangular section |
+
+To update it: print the vendor's filtered listing to PDF, run the extractor, and
+commit the result. To add springs by hand instead, paste them into the Catalogue
+tab, click **Download as JSON**, and commit that.
 
 Springs a visitor pastes for themselves stay in their own browser and layer on top
 of the shared list, marked `yours` against the shared rows' `shipped`. They can

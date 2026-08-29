@@ -151,13 +151,65 @@ test('usable travel prefers vendor data, then derates travel to solid', () => {
   close(derated.usableTravel_mm, 8 * 0.85);
 });
 
-test('incomplete rows report what is missing instead of guessing', () => {
-  const s = sm.normalizeSpring({ od_mm: 10 });
-  assert.equal(s.incomplete, true);
-  assert.ok(s.missing.includes('wire diameter'));
-  const noRate = sm.normalizeSpring({ od_mm: 10, wireDia_mm: 1 });
-  assert.equal(noRate.incomplete, true);
-  assert.match(noRate.missing[0], /spring rate/);
+test('what a spring cannot do without is the rate and the free length', () => {
+  // Neither is derivable here, so both are named.
+  const bare = sm.normalizeSpring({ od_mm: 10 });
+  assert.equal(bare.incomplete, true);
+  assert.match(bare.missing.join(' '), /spring rate/);
+  assert.match(bare.missing.join(' '), /free length/);
+
+  // Geometry alone still cannot give a rate without a coil count.
+  assert.equal(sm.normalizeSpring({ od_mm: 10, wireDia_mm: 1, freeLength_mm: 20 }).incomplete, true);
+
+  // Rate plus free length is enough, even with no wire diameter at all --
+  // that is what rectangular-wire and moulded springs give you.
+  const rect = sm.normalizeSpring({
+    od_mm: 10, id_mm: 7, wireWidth_mm: 1.5, wireThickness_mm: 1.5,
+    freeLength_mm: 25, rate_Npmm: 2, lengthAtMaxLoad_mm: 18, material: 'Spring Steel',
+  });
+  assert.equal(rect.incomplete, false);
+  assert.equal(rect.wireDia_mm, null, 'radial thickness is not a round wire diameter');
+  assert.equal(rect.activeCoils, null);
+  assert.equal(rect.solidLength_mm, null);
+  close(rect.usableTravel_mm, 7);
+  assert.ok(rect.warnings.some((w) => /Rectangular wire/.test(w)));
+  // Force at length still comes straight off the published rate.
+  close(sm.evaluate(rect, { targetForce_N: 4 }).working.installedLength_mm, 23);
+});
+
+test('an unrecognised material is left unknown, an unstated one is assumed', () => {
+  // Naming a material the tool has no properties for must not silently
+  // become music wire -- the stress number that follows would be nonsense.
+  const plastic = sm.normalizeSpring({
+    od_mm: 9, freeLength_mm: 10, rate_Npmm: 0.65, material: 'Ultem PEI',
+  });
+  assert.equal(plastic.materialKey, null);
+  assert.equal(plastic.incomplete, false);
+  assert.ok(plastic.warnings.some((w) => /not one the calculator has properties for/.test(w)));
+  const ev = sm.evaluate(plastic, { targetForce_N: 1.5 });
+  assert.equal(ev.working.utilisation, null, 'stress is not guessed at');
+  assert.equal(ev.allowable, null);
+  assert.equal(ev.feasible, true, 'the published rate still answers the question');
+
+  // No material named at all falls back to the default, and says so.
+  const assumed = sm.normalizeSpring({ od_mm: 10, wireDia_mm: 1, totalCoils: 12, freeLength_mm: 20 });
+  assert.equal(assumed.materialKey, sm.DEFAULT_MATERIAL);
+  assert.ok(assumed.derived.includes('materialKey'));
+  assert.ok(assumed.rate_Npmm > 0);
+});
+
+test('cut-to-length stock is flagged, because cutting it changes the rate', () => {
+  const s = sm.normalizeSpring({
+    od_mm: 5, wireDia_mm: 0.5, freeLength_mm: 254, rate_Npmm: 0.05,
+    family: 'Cut-to-Length Compression Springs', material: 'Spring Steel',
+  });
+  assert.ok(s.warnings.some((w) => /cut-to-length stock/i.test(w)));
+  // ...and it can be filtered out entirely.
+  const other = sm.normalizeSpring({ od_mm: 5, wireDia_mm: 0.5, freeLength_mm: 25, rate_Npmm: 0.5, family: 'Compression Springs', material: 'Spring Steel' });
+  const ok = sm.searchCatalog([s, other], { targetForce_N: 1, families: ['Compression Springs'] })
+    .filter((h) => h.ok);
+  assert.equal(ok.length, 1);
+  assert.equal(ok[0].spring.family, 'Compression Springs');
 });
 
 test('out-of-range spring index is flagged', () => {
