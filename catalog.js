@@ -268,6 +268,7 @@ export function rowsToSprings(rows, opts = {}) {
       forRodDia_mm: toMm(row.forRodDia, lu),
       forHoleDia_mm: toMm(row.forHoleDia, lu),
       packQty: parseNumber(row.packQty),
+      sourceUnits: lu === 'mm' ? 'mm' : 'in',
       price: row.price || null,
       source: source || `pasted table row ${i + 1}`,
       provenance: 'vendor-table-import',
@@ -306,6 +307,7 @@ export function springFromForm(f) {
       : toNewtons(String(f.maxLoad), f.forceUnit || 'lbf'),
     totalCoils: f.totalCoils === '' || f.totalCoils == null ? null : parseNumber(String(f.totalCoils)),
     activeCoils: f.activeCoils === '' || f.activeCoils == null ? null : parseNumber(String(f.activeCoils)),
+    sourceUnits: (f.lengthUnit || 'in') === 'mm' ? 'mm' : 'in',
     provenance: 'hand-entered',
   };
   Object.keys(raw).forEach((k) => { if (raw[k] === undefined) delete raw[k]; });
@@ -328,7 +330,8 @@ export function toCatalogJson(springs, meta = {}) {
 
 /** Keep only what was actually supplied, so a reload re-derives cleanly. */
 function stripDerived(s) {
-  const drop = new Set([...(s.derived || []), 'warnings', 'derived', 'incomplete', 'missing',
+  const drop = new Set([...(s.derived || []).filter((k) => k !== 'materialKey'),
+    'warnings', 'derived', 'incomplete', 'missing',
     'meanDia_mm', 'springIndex', 'travelToSolid_mm', 'usableTravel_mm', 'usableTravelSource',
     'maxUsableForce_N', 'minWorkingLength_mm', 'forceAtSolid_N', 'rateCheck', 'G_GPa']);
   const out = {};
@@ -342,7 +345,10 @@ function stripDerived(s) {
 export function fromCatalogJson(json) {
   const data = typeof json === 'string' ? JSON.parse(json) : json;
   const list = Array.isArray(data) ? data : data.springs || [];
-  return list.map((s) => normalizeSpring(s));
+  // A catalogue-level default saves repeating the field on every row.
+  const fallback = Array.isArray(data) ? null : data.sourceUnits;
+  return list.map((s) => normalizeSpring(
+    s.sourceUnits || !fallback ? s : { ...s, sourceUnits: fallback }));
 }
 
 export const MATERIAL_OPTIONS = Object.entries(MATERIALS).map(([key, m]) => ({ key, name: m.name }));
@@ -558,6 +564,7 @@ export function specBlockToSpring(pairs, opts = {}) {
   }
 
   raw.vendor = opts.vendor || null;
+  raw.sourceUnits = lu === 'mm' ? 'mm' : 'in';
   raw.type = 'compression';
   raw.provenance = 'spec-sheet-import';
   raw.source = opts.source || 'pasted spec sheet';

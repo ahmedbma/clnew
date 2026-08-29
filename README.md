@@ -98,9 +98,19 @@ The catalogue table carries every field, published and derived: family, material
 ends, OD, ID, wire, free / solid / at-max-load lengths, usable travel, rate and
 its tolerance, the vendor's max load beside the max usable load, coil count,
 spring index, temperature rating, mil spec, colour, pack quantity and price.
+It reads in **the units the vendor published** — inches, pounds, lbf/in and °F for
+a US listing — whatever the working units are set to elsewhere on the page, because
+a catalogue is a reference list and should match the source it came from. Each
+spring records its own `sourceUnits`, so a metric catalogue reads in mm and N.
+
+Anything the calculator worked out rather than read is marked **derived** — solid
+length, usable travel, coil count, and any diameter or rate reconstructed from the
+others. Two columns are always derived and say so in the heading.
+
 Every heading sorts, and the row beneath them filters — plain text matches what
-the cell shows, and number columns also take `>2`, `<=0.5`, `1..3`. Unknown values
-sort to the bottom in both directions rather than reading as zero.
+the cell shows, and number columns also take `>2`, `<=0.5`, `1..3`. Sorting uses
+the stored SI value, so a mixed-unit catalogue still orders correctly, and unknown
+values sort to the bottom in both directions rather than reading as zero.
 
 A spring carrying **notes** in the catalogue list has something worth knowing
 about it — a derived coil count too low for the rate equation to be reliable, a

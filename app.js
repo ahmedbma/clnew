@@ -27,6 +27,7 @@ const state = {
   selected: null,
   catSort: { key: null, dir: 'asc' },
   catFilters: {},
+  catUnits: 'in',
 };
 
 /**
@@ -821,23 +822,24 @@ const CAT_COLUMNS = [
       ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(springName(s))}</a>`
       : esc(springName(s))) },
   { key: 'family', label: 'family', kind: 'select', align: 'l', text: (s) => s.family || '' },
-  { key: 'material', label: 'material', kind: 'select', align: 'l', text: (s) => s.material || '' },
+  { key: 'material', label: 'material', kind: 'select', align: 'l', derivedKey: 'materialKey', text: (s) => s.material || '' },
   { key: 'ends', label: 'ends', kind: 'select', align: 'l',
     text: (s) => s.ends || (s.endsKey ? sm.getEnds(s.endsKey).name : '') },
   { key: 'od', label: 'OD', unit: 'length', kind: 'num', num: (s) => s.od_mm },
-  { key: 'id', label: 'ID', unit: 'length', kind: 'num', num: (s) => s.id_mm },
-  { key: 'wire', label: 'wire', unit: 'length', kind: 'num', num: (s) => s.wireDia_mm },
+  { key: 'id', label: 'ID', unit: 'length', kind: 'num', derivedKey: 'id_mm', num: (s) => s.id_mm },
+  { key: 'wire', label: 'wire', unit: 'length', kind: 'num', derivedKey: 'wireDia_mm', num: (s) => s.wireDia_mm },
   { key: 'free', label: 'free lg', unit: 'length', kind: 'num', num: (s) => s.freeLength_mm },
-  { key: 'solid', label: 'solid lg', unit: 'length', kind: 'num', num: (s) => s.solidLength_mm },
+  { key: 'solid', label: 'solid lg', unit: 'length', kind: 'num', derivedKey: 'solidLength_mm', num: (s) => s.solidLength_mm },
   { key: 'atload', label: 'lg at max load', unit: 'length', kind: 'num', num: (s) => s.lengthAtMaxLoad_mm },
-  { key: 'travel', label: 'usable travel', unit: 'length', kind: 'num', num: (s) => s.usableTravel_mm },
-  { key: 'rate', label: 'rate', unit: 'rate', kind: 'num', num: (s) => s.rate_Npmm },
+  { key: 'travel', label: 'usable travel', unit: 'length', kind: 'num',
+    derivedKey: ['usableTravel_mm', 'maxDeflection_mm'], num: (s) => s.usableTravel_mm },
+  { key: 'rate', label: 'rate', unit: 'rate', kind: 'num', derivedKey: 'rate_Npmm', num: (s) => s.rate_Npmm },
   { key: 'ratetol', label: 'rate tol', kind: 'num', dp: 1,
     num: (s) => (s.rateTol == null ? null : s.rateTol * 100), suffix: '%' },
   { key: 'maxload', label: 'vendor max load', unit: 'force', kind: 'num', num: (s) => s.maxLoad_N },
-  { key: 'maxusable', label: 'max usable load', unit: 'force', kind: 'num', num: (s) => s.maxUsableForce_N },
-  { key: 'coils', label: 'total coils', kind: 'num', dp: 1, num: (s) => s.totalCoils },
-  { key: 'index', label: 'index C', kind: 'num', dp: 1, num: (s) => s.springIndex },
+  { key: 'maxusable', label: 'max usable load', unit: 'force', kind: 'num', alwaysDerived: true, num: (s) => s.maxUsableForce_N },
+  { key: 'coils', label: 'total coils', kind: 'num', dp: 1, derivedKey: 'totalCoils', num: (s) => s.totalCoils },
+  { key: 'index', label: 'index C', kind: 'num', dp: 1, alwaysDerived: true, num: (s) => s.springIndex },
   { key: 'temp', label: 'max temp', unit: 'temp', kind: 'num', num: (s) => s.maxTemp_C },
   { key: 'milspec', label: 'mil spec', kind: 'text', align: 'l', text: (s) => s.milSpec || '' },
   { key: 'colour', label: 'colour', kind: 'select', align: 'l', text: (s) => s.colour || '' },
@@ -854,29 +856,56 @@ const CAT_COLUMNS = [
         : '') },
 ];
 
-/** A numeric column's value in the units the table is currently showing. */
+/**
+ * The catalogue is a reference list, so it reads in the units the vendor
+ * published -- inches, pounds, lbf/in and degrees F for a US listing -- not
+ * in the working units chosen elsewhere on the page. Where a catalogue mixes
+ * both, the majority wins and the header says which.
+ */
+function catalogueUnits() {
+  const seen = new Set(state.catalogue.map((s) => s.sourceUnits || state.lengthUnit));
+  return seen.size === 1 ? [...seen][0] : state.lengthUnit;
+}
 function colValue(col, spring) {
   if (col.kind !== 'num') return null;
   const raw = col.num(spring);
   if (raw == null || !Number.isFinite(raw)) return null;
-  if (col.unit === 'length') return state.lengthUnit === 'in' ? sm.mmToIn(raw) : raw;
-  if (col.unit === 'rate') return state.lengthUnit === 'in' ? sm.nPerMmToLbfPerIn(raw) : raw;
+  const us = state.catUnits === 'in';
+  if (col.unit === 'length') return us ? sm.mmToIn(raw) : raw;
+  if (col.unit === 'rate') return us ? sm.nPerMmToLbfPerIn(raw) : raw;
+  if (col.unit === 'force') return us ? sm.nToLbf(raw) : raw;
+  if (col.unit === 'temp') return us ? raw * 9 / 5 + 32 : raw;
   return raw;
 }
 function colDecimals(col) {
   if (col.dp != null) return col.dp;
-  if (col.unit === 'length') return state.lengthUnit === 'in' ? 3 : 2;
-  if (col.unit === 'rate') return state.lengthUnit === 'in' ? 2 : 4;
-  if (col.unit === 'force') return 3;
+  const us = state.catUnits === 'in';
+  if (col.unit === 'length') return us ? 3 : 2;
+  if (col.unit === 'rate') return us ? 2 : 4;
+  if (col.unit === 'force') return us ? 2 : 3;
   if (col.unit === 'temp') return 0;
   return 2;
 }
 function colUnitLabel(col) {
-  if (col.unit === 'length') return Lunit();
-  if (col.unit === 'rate') return state.lengthUnit === 'in' ? 'lbf/in' : 'N/mm';
-  if (col.unit === 'force') return 'N';
-  if (col.unit === 'temp') return '°C';
+  const us = state.catUnits === 'in';
+  if (col.unit === 'length') return us ? 'in' : 'mm';
+  if (col.unit === 'rate') return us ? 'lbf/in' : 'N/mm';
+  if (col.unit === 'force') return us ? 'lb' : 'N';
+  if (col.unit === 'temp') return us ? '°F' : '°C';
   return '';
+}
+/** Sorting always uses the stored SI value, so a mixed catalogue still orders right. */
+function colSortValue(col, spring) {
+  if (col.kind !== 'num') return null;
+  const raw = col.num(spring);
+  return raw == null || !Number.isFinite(raw) ? null : raw;
+}
+/** Did the calculator work this cell out, rather than read it from the vendor? */
+function isDerived(col, spring) {
+  if (col.alwaysDerived) return true;
+  if (!col.derivedKey) return false;
+  const keys = Array.isArray(col.derivedKey) ? col.derivedKey : [col.derivedKey];
+  return keys.some((k) => (spring.derived || []).includes(k));
 }
 /** What the cell reads as, which is also what a plain-text filter matches. */
 function colText(col, spring) {
@@ -926,8 +955,8 @@ function filteredCatalogue() {
     const dir = sort.dir === 'desc' ? -1 : 1;
     list.sort((a, b) => {
       if (col.kind === 'num') {
-        const x = colValue(col, a);
-        const y = colValue(col, b);
+        const x = colSortValue(col, a);
+        const y = colSortValue(col, b);
         // A blank is never "smallest" -- unknowns sort to the bottom either way.
         if (x == null && y == null) return 0;
         if (x == null) return 1;
@@ -944,7 +973,9 @@ function catalogueRowsHtml(list) {
   const span = CAT_COLUMNS.length + 1;
   return list.map((s) => `<tr>
     ${CAT_COLUMNS.map((col) => `<td class="${col.align === 'l' || col.kind !== 'num' ? 'l' : 'num'}">${
-      col.html ? col.html(s) : esc(colText(col, s))}</td>`).join('')}
+      col.html ? col.html(s) : esc(colText(col, s))
+    }${!col.html && !col.alwaysDerived && isDerived(col, s) && colText(col, s)
+      ? ' <span class="derived">derived</span>' : ''}</td>`).join('')}
     <td class="l"><button class="link" data-del="${esc(springKey(s))}" data-origin="${s._origin}">remove</button></td>
   </tr>
   ${s.warnings.length ? `<tr class="notes-row" data-for="${esc(springKey(s))}" hidden>
@@ -956,6 +987,7 @@ function catalogueRowsHtml(list) {
 function refreshCatalogueRows() {
   const body = $('c-rows');
   if (!body) return;
+  state.catUnits = catalogueUnits();
   const list = filteredCatalogue();
   body.innerHTML = catalogueRowsHtml(list);
   $('c-count').textContent = list.length === state.catalogue.length
@@ -988,6 +1020,7 @@ function wireRowButtons() {
 
 function drawCatalogue() {
   const box = $('c-list');
+  state.catUnits = catalogueUnits();
   const shipped = state.catalogue.filter((x) => x._origin === 'shared').length;
   const mine = state.catalogue.filter((x) => x._origin === 'local').length;
   const warn = state.storeError ? `<div class="callout bad"><p>${esc(state.storeError)}</p></div>` : '';
@@ -1009,7 +1042,8 @@ function drawCatalogue() {
   const heads = CAT_COLUMNS.map((col) => {
     const unit = colUnitLabel(col);
     return `<th class="${col.align === 'l' || col.kind !== 'num' ? 'l' : ''}" data-col="${col.key}" aria-sort="none">
-      <button class="sortable" data-sort="${col.key}">${esc(col.label)}${unit ? ` <span class="u">${esc(unit)}</span>` : ''}<span class="caret"></span></button>
+      <button class="sortable" data-sort="${col.key}">${esc(col.label)}${unit ? ` <span class="u">${esc(unit)}</span>` : ''}${
+        col.alwaysDerived ? ' <span class="derived">derived</span>' : ''}<span class="caret"></span></button>
     </th>`;
   }).join('');
 
@@ -1029,7 +1063,11 @@ function drawCatalogue() {
       it sees these. ${mine} added on this browser only.
       ${state.catalogue.filter((x) => x.warnings.length).length} carry notes &mdash; things worth knowing
       about a spring, not faults. Click a note badge to read them.</p>
-    <p class="hint">Click any heading to sort. The row under the headings filters:
+    <p class="hint">Shown in the units the vendor publishes
+      (${state.catUnits === 'in' ? 'inches, pounds, lbf/in, &deg;F' : 'mm, newtons, N/mm, &deg;C'}), whatever
+      the working units are set to elsewhere. Anything marked
+      <span class="derived">derived</span> the calculator worked out; everything else is as published.
+      <br>Click any heading to sort. The row under the headings filters:
       type text to match, or a comparison on a number column &mdash;
       <code>&gt;2</code>, <code>&lt;=0.5</code>, <code>1..3</code>.
       Showing <strong id="c-count">all ${state.catalogue.length}</strong>.

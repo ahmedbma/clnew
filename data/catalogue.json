@@ -6,6 +6,8 @@
  "source": "McMaster-Carr catalogue PDF, 1,566 products",
  "retrieved": "2026-08-29",
  "url": "https://www.mcmaster.com/products/springs/compression-springs-1~/system-of-measurement~inch/compression-spring-type~straight/",
+ "updated": "2026-08-29",
+ "sourceUnits": "in",
  "springs": [
   {
    "partNumber": "9657K236",
@@ -33109,6 +33111,5 @@
    "price": "20.58",
    "maxTemp_F": 339.99800000000005
   }
- ],
- "updated": "2026-08-29"
+ ]
 }
