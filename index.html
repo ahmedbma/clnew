@@ -327,6 +327,24 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
           </select>
           <div class="hint">Only a straight spring has one rate all the way down. Conical, barrel and
             hourglass springs stiffen as their coils close.</div></div>
+        <div><label for="f-duty">Spring class</label>
+          <select id="f-duty">
+            <option value="">any</option>
+            <option value="general">general purpose only</option>
+            <option value="die">die springs only</option>
+          </select>
+          <div class="hint">Die springs are rectangular wire, sized by the hole and shaft they run in
+            rather than by their own OD, and sold against a load rating.</div></div>
+        <div><label for="f-section">Wire section</label>
+          <select id="f-section">
+            <option value="">any</option>
+            <option value="round">round wire only</option>
+            <option value="square">square wire</option>
+            <option value="rectangular">rectangular wire</option>
+            <option value="moulded">moulded</option>
+          </select>
+          <div class="hint">Only round wire gets a coil count, solid length and stress figure &mdash;
+            every one of those formulas assumes it.</div></div>
         <div><label for="f-system">Measurement system</label>
           <select id="f-system">
             <option value="">any</option>
@@ -432,8 +450,8 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
         page. Copy the whole thing, boilerplate and all; the compliance and country-of-origin lines get
         dropped. A missing part number is fine &mdash; the spring gets named from its dimensions.</li>
     </ul>
-    <p class="hint">2,597 McMaster-Carr straight compression springs ship with the tool and load for
-      everyone &mdash; 1,566 inch and 1,031 metric. Anything you paste here is <strong>yours alone</strong>, saved in this browser, layered
+    <p class="hint">3,189 McMaster-Carr compression springs ship with the tool and load for everyone
+      &mdash; 2,597 straight (inch and metric), 484 die springs and 108 conical. Anything you paste here is <strong>yours alone</strong>, saved in this browser, layered
       on top of them, and marked <em>yours</em> in the table below. To put springs in the shared list
       instead: <strong>Download as JSON</strong> and commit the file over
       <code>data/catalogue.json</code> in the repository.</p>

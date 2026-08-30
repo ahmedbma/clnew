@@ -189,3 +189,12 @@ test('a measurement system or a coil shape can be asked for in words', () => {
   assert.equal(f('1.5N tapered spring').shapeKey, 'conical');
   assert.equal(f('1.5N straight only').shapeKey, 'straight');
 });
+
+test('a spring class or a wire section can be asked for in words', () => {
+  assert.equal(f('200 lb die springs').duty, 'die');
+  assert.equal(f('200 lb, no die springs').duty, 'general');
+  assert.equal(f('1.5N round wire only').sectionKey, 'round');
+  assert.equal(f('200 lb rectangular wire').sectionKey, 'rectangular');
+  assert.equal(f('1.5N in a half inch bore').duty, undefined);
+  assert.equal(f('1.5N in a half inch bore').sectionKey, undefined);
+});

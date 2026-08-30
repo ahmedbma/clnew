@@ -66,18 +66,23 @@ maximum, because diameter is only filtered as an upper bound.
 
 ## The shared catalogue
 
-`data/catalogue.json` carries **2,597 McMaster-Carr straight compression springs**
-— the vendor's full filtered listings for both inch and metric sizes, extracted
-from their own catalogue PDFs on 2026-08-29. Every visitor gets them on first
-load, in any browser, with nothing to paste. Each row keeps its part number and a
-link back to the vendor page. No part number appears in both listings.
+`data/catalogue.json` carries **3,189 McMaster-Carr compression springs** —
+four full filtered listings, extracted from the vendor's own catalogue PDFs.
+Every visitor gets them on first load, in any browser, with nothing to paste.
+Each row keeps its part number and a link back to the vendor page. No part
+number appears in more than one listing.
 
-The listings print **different columns per product family**, so each has its own
-pattern — one pattern across all of them would silently shift values into the
-wrong fields. `tools/extract-mcmaster-pdf.py` reads the inch listing (five
-families) and `tools/extract-mcmaster-metric-pdf.py` the metric one (two). Both
-scripts then check every row against the vendor's own arithmetic: rate x (free
-length − compressed length at max load) must reproduce the published max load.
+| Listing | Rows | Extractor |
+|---|---|---|
+| Straight compression, inch | 1,566 | `tools/extract-mcmaster-pdf.py` |
+| Straight compression, metric | 1,031 | `tools/extract-mcmaster-metric-pdf.py` |
+| Die springs (inch + metric) | 484 | `tools/extract-mcmaster-die-pdf.py` |
+| Conical "tight-space" | 108 | `tools/extract-mcmaster-conical-pdf.py` |
+
+Each listing prints **different columns per product family**, so each family
+gets its own pattern — one pattern across all of them would silently shift
+values into the wrong fields. Every parsed row is then checked against the
+vendor's own arithmetic where the vendor gives enough to check it.
 
 | Family | Inch | Metric | Note |
 |---|---|---|---|
@@ -86,8 +91,32 @@ length − compressed length at max load) must reproduce the published max load.
 | Precision | 139 | 36 | carry their own OD and rate tolerances |
 | Mil. Spec. | 114 | — | keep their MS part number |
 | Plastic (Ultem PEI) | 22 | — | moulded, rectangular section |
+| Color-Coded Die Springs | 296 | 120 | chrome silicon, Raymond colour load rating |
+| Die Springs | 23 | — | tempered spring steel |
+| Cut-to-Length Die Springs | 24 | — | |
+| Rubber Die Springs | 21 | — | moulded polyurethane, no wire and no published rate |
+| Tight-Space (conical) | 108 | — | 302 stainless |
 
-Of the inch rows, 1,496 of 1,504 checkable agree within 12%; of the metric rows,
+**Die springs are a different object.** They publish no OD and no ID at all —
+only the hole they drop into and the shaft they run over — and they are wound
+from **rectangular** wire. Both facts are recorded as they are; no diameter is
+invented. The 21 rubber ones are a moulded polyurethane slug with no wire and
+no published rate, so the rate is taken as max load over the travel to reach
+it, which each row says.
+
+**Conical springs nest.** Their coils close inside each other rather than
+stacking, so the rate is not constant, the solid height is not `Nt x d`, and
+the stress formula does not apply. None of those three is reported for them;
+force at length still comes from the published rate.
+
+**One trap in the die listing.** The printed part number is clipped at the
+column edge on 16 rows, so seven different springs appear to share `9588K43`.
+Each row's hyperlink carries the true number, so that is what is used, and the
+printed and linked values are compared on every row. The inch, metric and
+conical listings were checked the same way and have no truncation: in each, the
+set of printed part numbers and the set of linked ones match exactly.
+
+Of the inch rows, 1,496 of 1,504 checkableOf the inch rows, 1,496 of 1,504 checkable agree within 12%; of the metric rows,
 968 of 1,031. Allowing for the rounding McMaster actually prints, 63 metric rows
 still cannot be reconciled — their own rate, travel and max load do not multiply
 out. Those are vendor inconsistencies, not parse errors: each is kept as

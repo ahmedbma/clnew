@@ -11,7 +11,7 @@
  * Pure functions, no DOM. Output is SI (mm, N) like the rest of the engine.
  */
 
-import { inToMm, resolveMaterial, resolveEnds, resolveShape, MATERIALS, END_TYPES, SHAPES } from './spring-math.js';
+import { inToMm, resolveMaterial, resolveEnds, resolveShape, MATERIALS, END_TYPES, SHAPES, SECTIONS } from './spring-math.js';
 import { parseNumber, toMm, toNewtons, toNewtonsPerMm } from './catalog.js';
 
 /* ------------------------------------------------------------ normalising */
@@ -305,6 +305,22 @@ export function parseQuery(input, { defaultForceUnit = 'N' } = {}) {
       fields.shapeKey = key;
       read.push({ field: 'shape', from: shapeWord[0], value: SHAPES[key].name });
     }
+  }
+
+  // --- spring class and wire section ------------------------------------
+  const die = text.match(/\bdie[\s-]*springs?\b|\bdie[\s-]*set\b/);
+  if (die) {
+    const negated = /\b(no|not|non|without|exclude|excluding|avoid|skip|except)\b[^.]{0,20}$/
+      .test(text.slice(0, die.index));
+    fields.duty = negated ? 'general' : 'die';
+    read.push({ field: 'duty', from: die[0], value: negated ? 'general purpose only' : 'die springs only' });
+  }
+  const sect = text.match(/\bround[\s-]*wire\b|\brectangular[\s-]*wire\b|\bsquare[\s-]*wire\b|\bmoulded\b|\bmolded\b/);
+  if (sect) {
+    const key = /round/.test(sect[0]) ? 'round' : /rectangular/.test(sect[0]) ? 'rectangular'
+      : /square/.test(sect[0]) ? 'square' : 'moulded';
+    fields.sectionKey = key;
+    read.push({ field: 'section', from: sect[0], value: SECTIONS[key].name });
   }
 
   // --- what to optimise for -------------------------------------------

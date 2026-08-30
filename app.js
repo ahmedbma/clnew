@@ -456,6 +456,8 @@ function findRequirements() {
     minTemperature_C: readTemp('f-mintemp', 'f-temp-u'),
     shapes: $('f-shape').value ? [$('f-shape').value] : null,
     systems: $('f-system').value ? [$('f-system').value] : null,
+    sections: $('f-section').value ? [$('f-section').value] : null,
+    duties: $('f-duty').value ? [$('f-duty').value] : null,
     cutToLength: $('f-cut').value || 'any',
     ends: $('f-ends').value ? [$('f-ends').value] : null,
     families: $('f-family').value ? [$('f-family').value] : null,
@@ -616,7 +618,7 @@ const OPTIONAL_NUMBERS = ['f-minod', 'f-maxod', 'f-minid', 'f-maxid', 'f-minwire
   'f-minfree', 'f-maxfree', 'f-maxinst', 'f-maxsolid', 'f-minrate', 'f-maxrate', 'f-minload',
   'f-mintravel', 'f-maxtravel', 'f-mintemp', 'f-postol', 'f-ratetol'];
 const OPTIONAL_SELECTS = { 'f-material': '', 'f-ends': '', 'f-shape': '', 'f-family': '',
-  'f-system': '', 'f-cut': '', 'f-set': '', 'f-sort': 'robustness' };
+  'f-system': '', 'f-section': '', 'f-duty': '', 'f-cut': '', 'f-set': '', 'f-sort': 'robustness' };
 
 /**
  * Inputs whose meaning depends on the length unit. With one diameter box the
@@ -673,6 +675,7 @@ const NL_LABELS = {
   minRate: 'min rate', maxRate: 'max rate',
   material: 'material', ends: 'end type', sortBy: 'rank by',
   cutToLength: 'cut-to-length', system: 'catalogued in', shape: 'coil shape',
+  duty: 'spring class', section: 'wire section',
 };
 
 function applyParse(res) {
@@ -700,6 +703,8 @@ function applyParse(res) {
   if (f.cutToLength) $('f-cut').value = f.cutToLength === 'exclude' ? 'exclude' : 'only';
   if (f.system) $('f-system').value = f.system;
   if (f.shapeKey) $('f-shape').value = f.shapeKey;
+  if (f.duty) $('f-duty').value = f.duty;
+  if (f.sectionKey) $('f-section').value = f.sectionKey;
   // Show the filters it set, so nothing is applied out of sight.
   if (Object.keys(f).some((k) => k !== 'force_N' && k !== 'forceUnit' && k !== 'forceValue')) {
     $('f-more').open = true;
@@ -1156,6 +1161,14 @@ function springColumns(pick) {
       derivedKey: 'system', text: (r) => (sm.UNIT_SYSTEMS[p(r).system]?.name || p(r).system || '') }),
     col({ key: 'shape', label: 'coil shape', kind: 'select', align: 'l',
       derivedKey: 'shapeKey', text: (r) => sm.SHAPES[p(r).shapeKey]?.name || '' }),
+    col({ key: 'section', label: 'section', kind: 'select', align: 'l',
+      derivedKey: 'sectionKey', text: (r) => sm.SECTIONS[p(r).sectionKey]?.name || '' }),
+    col({ key: 'duty', label: 'duty', kind: 'select', align: 'l',
+      derivedKey: 'dutyKey', text: (r) => sm.DUTIES[p(r).dutyKey]?.name || '' }),
+    // The Raymond colour code is a load rating. A plastic spring's colour is
+    // just its colour, and belongs in the colour column, not this one.
+    col({ key: 'rating', label: 'load rating', kind: 'select', align: 'l',
+      text: (r) => (p(r).loadRating ? [p(r).colour, p(r).loadRating].filter(Boolean).join(' - ') : '') }),
     col({ key: 'cut', label: 'cut to length', kind: 'select', align: 'l',
       derivedKey: 'cutToLength', text: (r) => (p(r).cutToLength ? 'yes' : 'no') }),
     col({ key: 'material', label: 'material', kind: 'select', align: 'l',
@@ -1163,8 +1176,14 @@ function springColumns(pick) {
     col({ key: 'ends', label: 'ends', kind: 'select', align: 'l',
       text: (r) => p(r).ends || (p(r).endsKey ? sm.getEnds(p(r).endsKey).name : '') }),
     col({ key: 'od', label: 'OD', unit: 'length', kind: 'num', num: (r) => p(r).od_mm }),
+    col({ key: 'odsmall', label: 'OD small end', unit: 'length', kind: 'num', num: (r) => p(r).odSmallEnd_mm }),
+    col({ key: 'hole', label: 'for hole', unit: 'length', kind: 'num', num: (r) => p(r).forHoleDia_mm }),
+    col({ key: 'rod', label: 'for shaft', unit: 'length', kind: 'num', num: (r) => p(r).forRodDia_mm }),
     col({ key: 'id', label: 'ID', unit: 'length', kind: 'num', derivedKey: 'id_mm', num: (r) => p(r).id_mm }),
+    col({ key: 'idsmall', label: 'ID small end', unit: 'length', kind: 'num', num: (r) => p(r).idSmallEnd_mm }),
     col({ key: 'wire', label: 'wire', unit: 'length', kind: 'num', derivedKey: 'wireDia_mm', num: (r) => p(r).wireDia_mm }),
+    col({ key: 'wirethk', label: 'wire thk', unit: 'length', kind: 'num', num: (r) => p(r).wireThickness_mm }),
+    col({ key: 'wirewd', label: 'wire wd', unit: 'length', kind: 'num', num: (r) => p(r).wireWidth_mm }),
     col({ key: 'free', label: 'free lg', unit: 'length', kind: 'num', num: (r) => p(r).freeLength_mm }),
     col({ key: 'solid', label: 'solid lg', unit: 'length', kind: 'num',
       derivedKey: 'solidLength_mm', num: (r) => p(r).solidLength_mm }),

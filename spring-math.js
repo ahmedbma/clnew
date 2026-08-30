@@ -88,6 +88,39 @@ export const SHAPES = {
   hourglass: { name: 'Hourglass', constantRate: false, aliases: ['hourglass', 'concave'] },
 };
 
+/**
+ * The cross-section of what is wound. Only a round wire has the d^4 / d^3 that
+ * the rate and stress formulas are built on, so this decides what can be
+ * worked out at all rather than being decoration.
+ */
+export const SECTIONS = {
+  round: { name: 'Round wire', roundWire: true },
+  square: { name: 'Square wire', roundWire: false },
+  rectangular: { name: 'Rectangular wire', roundWire: false },
+  moulded: { name: 'Moulded', roundWire: false },
+};
+
+/**
+ * What the spring is built for. A die spring is a different product class, not
+ * a size: rectangular wire, sized by the hole and shaft it runs in rather than
+ * by its own OD and ID, and sold against a load rating and a cycle life.
+ */
+export const DUTIES = {
+  general: { name: 'General purpose' },
+  die: { name: 'Die spring' },
+};
+
+/**
+ * Can the textbook helical-spring formulas be applied at all? They assume a
+ * cylinder of round wire of a known alloy. A cone, a rectangular section or an
+ * unrecognised material each break them, and a number produced anyway would be
+ * confidently wrong rather than missing.
+ */
+export function canUseCoilFormulas(s) {
+  return s.shapeKey === 'straight' && s.sectionKey === 'round'
+    && s.wireDia_mm != null && s.materialKey != null;
+}
+
 export function resolveShape(text) {
   if (!text) return null;
   const t = String(text).toLowerCase();
@@ -462,6 +495,22 @@ export function normalizeSpring(raw) {
 
   // --- wire / diameters: any two of OD, ID, wire dia give the third.
   const rectangularWire = num(s.wireWidth_mm) != null || num(s.wireThickness_mm) != null;
+  if (!s.sectionKey) {
+    const w = num(s.wireWidth_mm);
+    const t = num(s.wireThickness_mm);
+    // A polymer part is moulded whether or not the listing gives it a section:
+    // the urethane die springs are a solid slug with no wire in them at all.
+    const polymer = /plastic|pei|nylon|acetal|peek|rubber|urethane|elastomer/i.test(s.material || '');
+    s.sectionKey = polymer ? 'moulded'
+      : !rectangularWire ? 'round'
+        : s.materialKey == null ? 'moulded'
+          : (w != null && t != null && Math.abs(w - t) < 1e-9) ? 'square' : 'rectangular';
+    derived.push('sectionKey');
+  }
+  if (!s.dutyKey) {
+    s.dutyKey = /\bdie spring/i.test(s.family || '') ? 'die' : 'general';
+    derived.push('dutyKey');
+  }
   let od = num(s.od_mm), id = num(s.id_mm), d = num(s.wireDia_mm);
   // (OD - ID)/2 is the radial thickness, which is only the wire diameter when
   // the wire is round. Deriving it for rectangular wire would feed a wrong
@@ -474,7 +523,10 @@ export function normalizeSpring(raw) {
   // Rectangular-wire and moulded springs have no round wire diameter, and an
   // unknown alloy has no shear modulus. Their published rate still gives exact
   // force at length; only what the rate equation would infer is out of reach.
-  const roundWire = od != null && d != null && s.materialKey != null;
+  // The coil formulas assume a straight cylinder of round wire. A conical or
+  // barrel spring fails that just as surely as a rectangular section does: its
+  // coils nest, so neither the inverted coil count nor Nt x d means anything.
+  const roundWire = od != null && d != null && s.materialKey != null && s.shapeKey === 'straight';
   // Cut-to-length stock is sold by the metre and cut to suit; its published
   // rate belongs to the full uncut length, and cutting it changes the rate.
   if (s.cutToLength) {
@@ -482,16 +534,12 @@ export function normalizeSpring(raw) {
       + 'the published rate is for that whole length. Cutting it removes active coils and stiffens the '
       + 'spring in proportion - half the length is about twice the rate.');
   }
-  if (rectangularWire) {
-    // Say what the section actually is: these are square, rectangular or
-    // moulded, and "wire" is simply wrong for a moulded spring.
-    const w = num(s.wireWidth_mm);
-    const t = num(s.wireThickness_mm);
-    const square = w != null && t != null && Math.abs(w - t) < 1e-9;
-    const moulded = s.materialKey == null || /plastic|pei|nylon|acetal|peek/i.test(s.material || '');
-    const shape = moulded
-      ? `Moulded ${square ? 'square' : 'rectangular'} section rather than wound wire`
-      : `${square ? 'Square' : 'Rectangular'}-section wire, not round`;
+  if (s.sectionKey !== 'round') {
+    // Say what the section actually is: square, rectangular or moulded are
+    // three different objects, and "wire" is simply wrong for a moulded one.
+    const shape = s.sectionKey === 'moulded'
+      ? 'Moulded rather than wound from wire'
+      : `${SECTIONS[s.sectionKey].name}, not round`;
     warnings.push(`${shape}, so coil count, solid length and stress are not worked out - `
       + 'those all assume a round wire. Force at length comes straight from the published rate and is unaffected.');
   }
@@ -500,10 +548,11 @@ export function normalizeSpring(raw) {
     s.meanDia_mm = meanDiameter(od, d);
     s.springIndex = springIndex(s.meanDia_mm, d);
   }
-  if (s.nonLinearShape) {
-    warnings.push(`Listed as "${s.nonLinearShape}" rather than a straight cylindrical spring. `
-      + `Conical, barrel and hourglass springs stiffen as their coils close, so the constant rate `
-      + `this calculator assumes will understate the force near the end of travel.`);
+  if (s.shapeKey !== 'straight') {
+    warnings.push(`${SHAPES[s.shapeKey].name} rather than a straight cylindrical spring. Its coils nest as `
+      + 'it compresses, so the rate is not constant and neither coil count, solid length nor stress is '
+      + 'worked out here - all three assume a cylinder. The published rate is a nominal figure; force '
+      + 'near the end of travel will run above it.');
   }
   if (s.springIndex != null && s.springIndex < 4) warnings.push(`Spring index C=${s.springIndex.toFixed(1)} is below 4 - tightly wound, high stress concentration, hard to manufacture.`);
   if (s.springIndex != null && s.springIndex > 14) warnings.push(`Spring index C=${s.springIndex.toFixed(1)} is above 14 - loose, prone to tangling and buckling.`);
@@ -531,6 +580,26 @@ export function normalizeSpring(raw) {
   if (roundWire) {
     if (Nt == null && Na != null) { Nt = totalFromActive(Na, s.endsKey); derived.push('totalCoils'); }
     s.activeCoils = Na; s.totalCoils = Nt; s.rate_Npmm = k;
+  }
+
+  // Last resort for the rate: a published load at a published length is two
+  // points on the force-deflection line, and the line goes through the origin,
+  // so their ratio is the rate. It is the only thing some listings give -- the
+  // moulded urethane die springs publish no rate at all -- and for anything
+  // that is not truly linear it is an average across that travel, said so below.
+  if (s.rate_Npmm == null) {
+    const F = num(s.maxLoad_N);
+    const L0v = num(s.freeLength_mm);
+    const Lv = num(s.lengthAtMaxLoad_mm);
+    const travel = L0v != null && Lv != null ? L0v - Lv : num(s.maxDeflection_mm);
+    if (F != null && travel != null && travel > 0) {
+      s.rate_Npmm = F / travel;
+      k = s.rate_Npmm;
+      derived.push('rate_Npmm');
+      warnings.push('No spring rate is published for this one. It is taken as the max load divided by '
+        + 'the travel to reach it, which is exact for a linear spring and an average across that '
+        + 'travel for anything else.');
+    }
   }
 
   // The rate and the free length are what the tool cannot work without.
@@ -630,7 +699,7 @@ export function normalizeSpring(raw) {
   // figure for wire with the set NOT removed; a spring pre-set at the factory
   // takes appreciably more, and a rating this high is itself the evidence the
   // spring is pre-set. Both readings are given, so the number can be judged.
-  if (vendorMaxLoad != null && s.meanDia_mm != null && d != null && s.materialKey != null) {
+  if (vendorMaxLoad != null && s.meanDia_mm != null && canUseCoilFormulas(s)) {
     const tau = shearStress({ force_N: vendorMaxLoad, D_mm: s.meanDia_mm, d_mm: d,
       factor: staticShearFactor(s.springIndex) });
     const plain = allowableShearStress(s.materialKey, d).tauAllow_MPa;
@@ -684,7 +753,7 @@ export function evaluate(springIn, opts = {}) {
   const C = s.springIndex;
   // Stress needs a round wire and a known alloy; without either, it is left
   // unreported rather than computed from a stand-in.
-  const canStress = C != null && s.wireDia_mm != null && s.materialKey != null;
+  const canStress = C != null && canUseCoilFormulas(s);
   const Ks = canStress ? staticShearFactor(C) : null;
   const Kw = canStress ? wahlFactor(C) : null;
   const allow = canStress ? allowableShearStress(s.materialKey, s.wireDia_mm, { setRemoved }) : null;
@@ -798,6 +867,8 @@ export function evaluate(springIn, opts = {}) {
  *   maxTravelUsedFraction    e.g. 0.8 -- do not sit near the travel limit
  *   shapes                   ['straight', 'conical', ...] -- coil forms to keep
  *   systems                  ['inch'] or ['metric'] -- how the part is catalogued
+ *   sections                 ['round', 'rectangular', ...] -- the wire section
+ *   duties                   ['general'] or ['die'] -- general purpose or die spring
  *   cutToLength              'any' | 'exclude' | 'only' -- long stock you cut yourself
  *   sortBy                   'robustness' | 'travel' | 'compact' | 'rate' | 'force-precision'
  */
@@ -813,7 +884,7 @@ export function searchCatalog(springs, req = {}) {
     minRatedLoad_N = null,
     minTemperature_C = null,
     straightOnly = false,
-    shapes = null, systems = null,
+    shapes = null, systems = null, sections = null, duties = null,
     cutToLength = 'any',
     materials = null, ends = null, families = null,
     minTravelHeadroom_mm = 0,
@@ -852,6 +923,8 @@ export function searchCatalog(springs, req = {}) {
     if (straightOnly && s.shapeKey !== 'straight') rejected.push(`Listed as ${SHAPES[s.shapeKey].name}, not a straight cylindrical spring.`);
     if (shapes && shapes.length && !shapes.includes(s.shapeKey)) rejected.push(`${SHAPES[s.shapeKey].name} coil shape excluded.`);
     if (systems && systems.length && !systems.includes(s.system)) rejected.push(`${UNIT_SYSTEMS[s.system]?.name || s.system} parts excluded.`);
+    if (sections && sections.length && !sections.includes(s.sectionKey)) rejected.push(`${SECTIONS[s.sectionKey].name} excluded.`);
+    if (duties && duties.length && !duties.includes(s.dutyKey)) rejected.push(`${DUTIES[s.dutyKey].name} excluded.`);
     if (cutToLength === 'exclude' && s.cutToLength) rejected.push('Cut-to-length stock, excluded.');
     if (cutToLength === 'only' && !s.cutToLength) rejected.push('Not cut-to-length stock.');
     if (materials && materials.length && !materials.includes(s.materialKey)) rejected.push('Material excluded.');

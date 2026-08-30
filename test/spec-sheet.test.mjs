@@ -134,7 +134,11 @@ test('a non-cylindrical spring warns that the rate is not linear', () => {
   ].join('\n');
   assert.equal(cat.importAny(sheet('Straight')).springs[0].warnings.length, 0);
   const conical = cat.importAny(sheet('Conical')).springs[0];
-  assert.ok(conical.warnings.some((w) => /stiffen as their coils close/.test(w)));
+  assert.ok(conical.warnings.some((w) => /Conical rather than a straight cylindrical spring/.test(w)));
+  assert.equal(conical.shapeKey, 'conical');
+  // The cylinder formulas are off, not just caveated.
+  assert.equal(conical.solidLength_mm, null);
+  assert.equal(conical.totalCoils, null);
 });
 
 test('two sheets pasted back to back split into two springs', () => {

@@ -172,7 +172,7 @@ test('what a spring cannot do without is the rate and the free length', () => {
   assert.equal(rect.activeCoils, null);
   assert.equal(rect.solidLength_mm, null);
   close(rect.usableTravel_mm, 7);
-  assert.ok(rect.warnings.some((w) => /Square-section wire, not round/.test(w)));
+  assert.ok(rect.warnings.some((w) => /Square wire, not round/.test(w)));
   // Force at length still comes straight off the published rate.
   close(sm.evaluate(rect, { targetForce_N: 4 }).working.installedLength_mm, 23);
 });
@@ -184,17 +184,27 @@ test('a non-round section is named for what it actually is', () => {
   const warn = (s) => sm.normalizeSpring(s).warnings.join(' | ');
   const base = { od_mm: 10, id_mm: 7, freeLength_mm: 25, rate_Npmm: 2 };
 
+  const key = (o) => sm.normalizeSpring(o).sectionKey;
   const square = warn({ ...base, wireWidth_mm: 1.5, wireThickness_mm: 1.5, material: 'Music Wire' });
-  assert.match(square, /Square-section wire, not round/);
+  assert.match(square, /Square wire, not round/);
+  assert.equal(key({ ...base, wireWidth_mm: 1.5, wireThickness_mm: 1.5, material: 'Music Wire' }), 'square');
 
   const oblong = warn({ ...base, wireWidth_mm: 1.5, wireThickness_mm: 0.9, material: 'Music Wire' });
-  assert.match(oblong, /Rectangular-section wire, not round/);
+  assert.match(oblong, /Rectangular wire, not round/);
+  assert.equal(key({ ...base, wireWidth_mm: 1.5, wireThickness_mm: 0.9, material: 'Music Wire' }), 'rectangular');
 
   // Ultem PEI has no spring properties in the table, and is moulded rather
   // than wound, so calling any of it "wire" is simply wrong.
   const moulded = warn({ ...base, wireWidth_mm: 1.5, wireThickness_mm: 0.9, material: 'Ultem PEI' });
-  assert.match(moulded, /Moulded rectangular section rather than wound wire/);
+  assert.match(moulded, /Moulded rather than wound from wire/);
   assert.doesNotMatch(moulded, /wire, not round/);
+
+  // A urethane die spring has no section columns at all -- it is a solid slug.
+  // Reading the absence of a width as "round wire" would be exactly wrong.
+  const slug = sm.normalizeSpring({ ...base, material: 'Polyurethane Rubber' });
+  assert.equal(slug.sectionKey, 'moulded');
+  assert.match(slug.warnings.join(' | '), /Moulded rather than wound from wire/);
+  assert.equal(key({ ...base, wireDia_mm: 1, material: 'Music Wire' }), 'round');
 
   // Whatever the section, the same consequence is spelled out: the derived
   // columns are skipped, the published rate is not affected.
@@ -618,8 +628,12 @@ test('coil shape is a category, and searchable as one', () => {
   assert.equal(cone.shapeKey, 'conical');
   assert.equal(sm.normalizeSpring({ od_mm: 10, shape: 'Tapered' }).shapeKey, 'conical');
   assert.equal(sm.normalizeSpring({ od_mm: 10, nonLinearShape: 'barrel' }).shapeKey, 'barrel');
-  // A conical spring does not have one rate, and the report has to say so.
-  assert.ok(cone.warnings.some((w) => /stiffen as their coils close/.test(w)));
+  // A conical spring does not have one rate, and the report has to say so --
+  // and must not quietly report a coil count or solid length that assumes one.
+  assert.ok(cone.warnings.some((w) => /Conical rather than a straight cylindrical spring/.test(w)));
+  assert.equal(cone.solidLength_mm, null);
+  assert.equal(cone.totalCoils, null);
+  assert.equal(straight.solidLength_mm != null, true, 'a straight one still gets both');
 
   const springs = [straight, cone];
   const keys = (req) => sm.searchCatalog(springs, { targetForce_N: 2, ...req })
@@ -660,4 +674,65 @@ test('a vendor rating above allowable is explained, not just flagged', () => {
   const preset = sm.evaluate(s, { targetForce_N: s.maxLoad_N, setRemoved: true }).working.utilisation;
   assert.ok(preset < strict);
   assert.ok(Math.abs(preset / strict - 0.35 / 0.50) < 1e-9, 'the two allowable fractions, nothing else');
+});
+
+test('a die spring is its own class, sized by the hole and shaft it runs in', () => {
+  // Die springs publish no OD or ID at all, so nothing may be invented for
+  // them; what they do publish is the bore and the rod, plus a load rating.
+  const die = sm.normalizeSpring({
+    partNumber: '9588K431', family: 'Color-Coded Die Springs', material: 'Chrome Silicon Steel',
+    ends: 'Closed and Ground', colour: 'Gold', loadRating: 'Heavy Load',
+    forHoleDia_mm: 9.525, forRodDia_mm: 4.7625,
+    wireThickness_mm: 1.3716, wireWidth_mm: 1.8288,
+    freeLength_mm: 31.75, lengthAtMaxLoad_mm: 23.876,
+    maxLoad_N: 30 * sm.LBF_TO_N, rate_Npmm: 98 * sm.LBF_PER_IN_TO_N_PER_MM,
+  });
+  assert.equal(die.dutyKey, 'die');
+  assert.equal(die.sectionKey, 'rectangular');
+  assert.equal(die.shapeKey, 'straight');
+  assert.equal(die.od_mm ?? null, null, 'no OD is published and none is invented');
+  assert.equal(die.springIndex ?? null, null, 'and no spring index follows from one');
+  assert.equal(die.solidLength_mm, null);
+  assert.equal(sm.canUseCoilFormulas(die), false);
+  assert.equal(sm.evaluate(die, { targetForce_N: 50 }).working.utilisation, null);
+  // Force at length is unaffected -- it is the published rate and nothing else.
+  close(sm.evaluate(die, { targetForce_N: 50 }).working.deflection_mm, 50 / die.rate_Npmm);
+
+  // A general-purpose spring is not swept up by the die filter, and vice versa.
+  const plain = sm.normalizeSpring({
+    partNumber: 'P', family: 'Compression Springs', material: 'Music Wire',
+    od_mm: 10, wireDia_mm: 1, freeLength_mm: 40, rate_Npmm: 2,
+  });
+  assert.equal(plain.dutyKey, 'general');
+  const keys = (req) => sm.searchCatalog([die, plain], { targetForce_N: 20, ...req })
+    .filter((r) => r.ok).map((r) => r.spring.partNumber);
+  assert.deepEqual(keys({}).sort(), ['9588K431', 'P']);
+  assert.deepEqual(keys({ duties: ['die'] }), ['9588K431']);
+  assert.deepEqual(keys({ duties: ['general'] }), ['P']);
+  assert.deepEqual(keys({ sections: ['round'] }), ['P']);
+  assert.deepEqual(keys({ sections: ['rectangular'] }), ['9588K431']);
+});
+
+test('a rate is recovered from a published load at a published length', () => {
+  // The urethane die springs publish no rate. Load over travel is exactly the
+  // rate for a linear spring, and an average across that travel for a slug of
+  // rubber -- which has to be said rather than assumed away.
+  const slug = sm.normalizeSpring({
+    partNumber: '1578T1', family: 'Rubber Die Springs', material: 'Polyurethane Rubber',
+    forHoleDia_mm: 17.4625, forRodDia_mm: 4.7625,
+    freeLength_mm: 25.4, lengthAtMaxLoad_mm: 19.05, maxLoad_N: 1280 * sm.LBF_TO_N,
+  });
+  assert.equal(slug.incomplete, false, 'it is usable, not discarded');
+  close(slug.rate_Npmm, (1280 * sm.LBF_TO_N) / 6.35);
+  assert.ok(slug.derived.includes('rate_Npmm'));
+  assert.match(slug.warnings.join(' | '), /No spring rate is published/);
+  assert.equal(slug.sectionKey, 'moulded');
+
+  // A published rate is never overwritten by the inference.
+  const given = sm.normalizeSpring({
+    od_mm: 10, wireDia_mm: 1, freeLength_mm: 40, lengthAtMaxLoad_mm: 30,
+    maxLoad_N: 100, rate_Npmm: 2, material: 'Music Wire',
+  });
+  close(given.rate_Npmm, 2);
+  assert.ok(!given.derived.includes('rate_Npmm'));
 });
