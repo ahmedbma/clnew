@@ -11,9 +11,6 @@ const STORE_KEY = 'springcalc.catalog.v1';
 // Bumping this clears every browser's stored springs once, on next load.
 // Used to wipe the synthetic demo data the tool used to ship with.
 const RESET_TOKEN = '2026-08-27-clean-slate';
-// Results are ranked, so a window onto the best of them is the useful view.
-// The catalogue is a reference list and shows in full.
-const MAX_RESULT_ROWS = 100;
 
 const state = {
   lengthUnit: 'in',
@@ -551,7 +548,6 @@ function renderResults(req) {
     rows: hits,
     tState: state.find,
     prefix: 'f',
-    cap: MAX_RESULT_ROWS,
     rowKey: (h) => springKey(h.spring),
     rowClass: (h) => (h.ok ? '' : 'rejected'),
     expand: (h) => notesExpand(h.spring),
@@ -934,20 +930,40 @@ function isDerived(col, row) {
  * How to label a column's heading. "derived" only when it is true of every
  * row that has a value -- a blanket label on a mixed column would be false.
  */
-function derivedLabel(col, rows) {
+function derivedLabel(col, st) {
   if (col.alwaysDerived) return { text: 'derived', title: 'Always worked out by the calculator.' };
-  if (!col.derivedKey || !rows.length) return null;
-  let withValue = 0;
-  let derived = 0;
-  for (const r of rows) {
-    if (colText(col, r) === '') continue;
-    withValue++;
-    if (isDerived(col, r)) derived++;
+  if (!col.derivedKey || !st.derived) return null;
+  return st.derived === st.withValue
+    ? { text: 'derived', title: `Worked out by the calculator for all ${st.withValue} of these.` }
+    : { text: 'some derived', title: `Worked out by the calculator for ${st.derived} of ${st.withValue}; the rest are as published.` };
+}
+
+/**
+ * One walk over the rows per column, collecting everything the heading and the
+ * filter row need. Cheap emptiness test: a numeric cell is blank when its
+ * number is missing, which does not need the value formatted to find out.
+ */
+function columnStats(columns, rows) {
+  const out = {};
+  for (const col of columns) {
+    const st = { units: [], options: [], withValue: 0, derived: 0 };
+    const units = new Set();
+    const options = col.kind === 'select' ? new Set() : null;
+    for (const r of rows) {
+      if (options) { const t = col.text(r); if (t) options.add(t); }
+      let has;
+      if (col.kind === 'num') { const v = col.num(r); has = v != null && Number.isFinite(v); }
+      else has = col.text(r) !== '';
+      if (!has) continue;
+      st.withValue++;
+      if (col.unit) units.add(colUnit(col, r));
+      if (isDerived(col, r)) st.derived++;
+    }
+    st.units = [...units];
+    if (options) st.options = [...options].sort();
+    out[col.key] = st;
   }
-  if (!derived) return null;
-  return derived === withValue
-    ? { text: 'derived', title: `Worked out by the calculator for all ${withValue} of these.` }
-    : { text: 'some derived', title: `Worked out by the calculator for ${derived} of ${withValue}; the rest are as published.` };
+  return out;
 }
 
 /**
@@ -1007,27 +1023,21 @@ function applyFiltersAndSort(rows, columns, tState) {
  * rows, and the per-table extras; only the tbody is rebuilt on sort/filter.
  */
 function buildTable(box, spec) {
-  const { columns, rows, tState, prefix, trailing, expand, rowKey, rowClass, onRowClick, cap } = spec;
+  const { columns, rows, tState, prefix, trailing, expand, rowKey, rowClass, onRowClick } = spec;
 
-  const options = {};
-  columns.filter((c) => c.kind === 'select').forEach((col) => {
-    options[col.key] = [...new Set(rows.map((r) => colText(col, r)).filter(Boolean))].sort();
-  });
-
+  // Everything the headings and the filter row need -- the select options,
+  // which units appear, how much of the column is derived -- in one pass per
+  // column. Three separate passes that formatted every cell were most of the
+  // time it took to draw a table of a few thousand rows.
+  const stats = columnStats(columns, rows);
   // A column's unit can differ row to row once the list mixes inch and metric
-  // parts, so work out whether one label covers the whole column or not.
-  const unitsUsed = {};
-  columns.forEach((col) => {
-    unitsUsed[col.key] = col.unit
-      ? [...new Set(rows.filter((r) => colText(col, r) !== '').map((r) => colUnit(col, r)))]
-      : [];
-  });
-  const mixed = (col) => unitsUsed[col.key].length > 1;
+  // parts, so a single label does not always cover the column.
+  const mixed = (col) => stats[col.key].units.length > 1;
 
   const heads = columns.map((col) => {
-    const us = unitsUsed[col.key].map(unitLabel);
+    const us = stats[col.key].units.map(unitLabel);
     const unit = us.length ? us.join(' / ') : '';
-    const der = derivedLabel(col, rows);
+    const der = derivedLabel(col, stats[col.key]);
     const tip = [der && der.title, us.length > 1 && 'Units differ by row; each cell says which.']
       .filter(Boolean).join(' ');
     return `<th class="${col.align === 'l' || col.kind !== 'num' ? 'l' : ''}" data-col="${col.key}" aria-sort="none">
@@ -1040,7 +1050,7 @@ function buildTable(box, spec) {
   const filters = columns.map((col) => {
     if (col.kind === 'select') {
       return `<th class="l"><select data-filter="${col.key}"><option value="">any</option>${
-        options[col.key].map((o) => `<option${o === tState.filters[col.key] ? ' selected' : ''}>${esc(o)}</option>`).join('')
+        stats[col.key].options.map((o) => `<option${o === tState.filters[col.key] ? ' selected' : ''}>${esc(o)}</option>`).join('')
       }</select></th>`;
     }
     return `<th class="l"><input data-filter="${col.key}" value="${esc(tState.filters[col.key] || '')}"
@@ -1054,42 +1064,90 @@ function buildTable(box, spec) {
       <tbody id="${prefix}-rows"></tbody></table></div>${spec.footer || ''}`;
 
   const span = columns.length + (trailing || []).length;
-  const refresh = () => {
-    const list = applyFiltersAndSort(rows, columns, tState);
-    const shown = cap ? list.slice(0, cap) : list;
-    document.getElementById(`${prefix}-rows`).innerHTML = shown.map((r, i) => `<tr data-i="${i}"
-      class="${rowClass ? rowClass(r) : ''}">
+  const tbody = document.getElementById(`${prefix}-rows`);
+
+  const rowHtml = (r, i) => `<tr data-i="${i}" class="${rowClass ? rowClass(r) : ''}">
       ${columns.map((col) => `<td class="${col.align === 'l' || col.kind !== 'num' ? 'l' : 'num'}">${
         col.html ? col.html(r) : cellHtml(col, r, mixed(col))}</td>`).join('')}
       ${(trailing || []).map((t) => `<td class="l">${t.html(r)}</td>`).join('')}
     </tr>${expand && expand(r) ? `<tr class="notes-row" data-for="${esc(rowKey(r))}" hidden>
-      <td class="l" colspan="${span}">${expand(r)}</td></tr>` : ''}`).join('');
+      <td class="l" colspan="${span}">${expand(r)}</td></tr>` : ''}`;
+
+  // Every row is drawn, but not in one go. Laying out three thousand rows of
+  // thirty-odd columns is several seconds of blocked main thread, so the first
+  // screenful goes in immediately and the rest follows frame by frame. The
+  // table is readable and sortable straight away, and nothing is left out.
+  let shown = [];
+  let pending = 0;
+  const FIRST = 120;
+  const CHUNK = 400;
+
+  const refresh = () => {
+    const list = applyFiltersAndSort(rows, columns, tState);
+    shown = list;
+    cancelAnimationFrame(pending);
+
+    tbody.innerHTML = list.slice(0, FIRST).map(rowHtml).join('');
 
     const countEl = document.getElementById(`${prefix}-count`);
     if (countEl) {
       countEl.textContent = list.length === rows.length ? `all ${rows.length}` : `${list.length} of ${rows.length}`;
     }
-    const capEl = document.getElementById(`${prefix}-capnote`);
-    if (capEl) {
-      capEl.innerHTML = list.length > shown.length
-        ? `Drawing the top ${shown.length}; narrow the filters to see the rest.` : '';
-    }
+    const noteEl = document.getElementById(`${prefix}-capnote`);
+    const drawMore = (from) => {
+      if (from >= list.length) {
+        if (noteEl) noteEl.innerHTML = '';
+        return;
+      }
+      const to = Math.min(from + CHUNK, list.length);
+      tbody.insertAdjacentHTML('beforeend', list.slice(from, to).map((r, j) => rowHtml(r, from + j)).join(''));
+      if (noteEl) noteEl.innerHTML = `<span class="muted">drawing ${to} of ${list.length}&hellip;</span>`;
+      pending = requestAnimationFrame(() => drawMore(to));
+    };
+    if (list.length > FIRST) {
+      if (noteEl) noteEl.innerHTML = `<span class="muted">drawing ${FIRST} of ${list.length}&hellip;</span>`;
+      pending = requestAnimationFrame(() => drawMore(FIRST));
+    } else if (noteEl) noteEl.innerHTML = '';
+
     columns.forEach((col) => {
       const th = box.querySelector(`th[data-col="${col.key}"]`);
       if (th) th.setAttribute('aria-sort',
         tState.sort.key === col.key ? (tState.sort.dir === 'desc' ? 'descending' : 'ascending') : 'none');
     });
-    wireRowButtons(box);
-    if (onRowClick) {
-      box.querySelectorAll(`#${prefix}-rows tr[data-i]`).forEach((tr) => tr.addEventListener('click', (e) => {
-        if (e.target.closest('button, a')) return;
-        box.querySelectorAll('tr[data-i]').forEach((x) => x.classList.remove('sel'));
-        tr.classList.add('sel');
-        onRowClick(shown[Number(tr.dataset.i)], Number(tr.dataset.i));
-      }));
-    }
-    return shown;
+    return list;
   };
+
+  // One listener on the body rather than one per row: with every row drawn
+  // that is thousands of registrations, and they would have to be re-attached
+  // after every chunk.
+  tbody.addEventListener('click', (e) => {
+    const noteBtn = e.target.closest('[data-notes]');
+    if (noteBtn) {
+      e.stopPropagation();
+      const target = box.querySelector(`.notes-row[data-for="${CSS.escape(noteBtn.dataset.notes)}"]`);
+      if (target) {
+        target.hidden = !target.hidden;
+        noteBtn.setAttribute('aria-expanded', String(!target.hidden));
+      }
+      return;
+    }
+    const delBtn = e.target.closest('[data-del]');
+    if (delBtn) {
+      e.stopPropagation();
+      const key = delBtn.dataset.del;
+      // A shipped spring is not ours to delete -- hide it for this browser only.
+      if (delBtn.dataset.origin === 'shared') state.hidden.add(key);
+      else state.local = state.local.filter((x) => springKey(x) !== key);
+      saveStore(); rebuildCatalogue(); renderCatalogue();
+      return;
+    }
+    if (!onRowClick) return;
+    const tr = e.target.closest('tr[data-i]');
+    if (!tr || e.target.closest('button, a')) return;
+    tbody.querySelectorAll('tr.sel').forEach((x) => x.classList.remove('sel'));
+    tr.classList.add('sel');
+    onRowClick(shown[Number(tr.dataset.i)], Number(tr.dataset.i));
+  });
 
   box.querySelectorAll('[data-sort]').forEach((b) => b.addEventListener('click', () => {
     const key = b.dataset.sort;
@@ -1119,24 +1177,6 @@ function buildTable(box, spec) {
     refresh();
   });
   return refresh();
-}
-
-function wireRowButtons(box) {
-  box.querySelectorAll('[data-notes]').forEach((b) => b.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const target = box.querySelector(`.notes-row[data-for="${CSS.escape(b.dataset.notes)}"]`);
-    if (!target) return;
-    target.hidden = !target.hidden;
-    b.setAttribute('aria-expanded', String(!target.hidden));
-  }));
-  box.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const key = b.dataset.del;
-    // A shipped spring is not ours to delete -- hide it for this browser only.
-    if (b.dataset.origin === 'shared') state.hidden.add(key);
-    else state.local = state.local.filter((x) => springKey(x) !== key);
-    saveStore(); rebuildCatalogue(); renderCatalogue();
-  }));
 }
 
 /* ------------------------------------------------------- the column sets */
