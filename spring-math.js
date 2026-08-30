@@ -683,6 +683,25 @@ export function normalizeSpring(raw) {
     s.usableTravel_mm = s.travelToSolid_mm * (s.travelDerate ?? 0.85);
     s.usableTravelSource = `${((s.travelDerate ?? 0.85) * 100).toFixed(0)}% of travel to solid`;
     derived.push('usableTravel_mm');
+  } else if (L0 != null) {
+    // Last resort, for springs that publish no travel figure and whose solid
+    // height cannot be worked out either -- conical stock, whose coils nest, and
+    // square-wire stock. Without something here the only limit is the free
+    // length itself, which lets the solver squeeze a spring to a few percent of
+    // its own length and call it a fit.
+    //
+    // The number is the catalogue's own 95th percentile: across the 3,123
+    // springs that do carry a travel limit, usable travel runs to a median of
+    // 43% of free length, 70% at the 95th percentile, and above 80% for 1.3%
+    // of them. So 70% admits all but the deepest-travelling real springs while
+    // ruling out the physically impossible.
+    s.usableTravel_mm = L0 * UNBOUNDED_TRAVEL_FRACTION;
+    s.usableTravelSource = `${(UNBOUNDED_TRAVEL_FRACTION * 100).toFixed(0)}% of free length (assumed)`;
+    derived.push('usableTravel_mm');
+    warnings.push(`No travel limit is published for this spring and its solid height cannot be worked out, `
+      + `so usable travel is assumed to be ${(UNBOUNDED_TRAVEL_FRACTION * 100).toFixed(0)}% of free length - `
+      + 'the 95th percentile of every spring here that does publish one. Check the real solid height before '
+      + 'designing to anything near that.');
   } else {
     s.usableTravel_mm = null;
     s.usableTravelSource = null;
@@ -727,6 +746,13 @@ export function normalizeSpring(raw) {
 
   return { ...s, derived, warnings, incomplete: false };
 }
+
+/**
+ * Travel allowed for a spring that publishes no limit and whose solid height
+ * cannot be derived. Measured from this catalogue: the 95th percentile of
+ * usable travel over free length across the springs that do publish one.
+ */
+export const UNBOUNDED_TRAVEL_FRACTION = 0.70;
 
 /* -------------------------------------------------------------- evaluation */
 

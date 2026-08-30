@@ -1387,14 +1387,21 @@ function findColumns(isRange) {
       num: (h) => realLength(h.evaluation.working?.installedLength_mm) },
     ...(isRange ? [{ key: 'installed2', spring: (h) => h.spring, label: 'lg at high end', unit: 'length',
       kind: 'num', alwaysDerived: true, num: (h) => realLength(h.evaluation.workingHigh?.installedLength_mm) }] : []),
+    // Travel is reported at both ends of a band: the low end is where the
+    // spring sits when the mechanism is at rest, and a band that starts halfway
+    // down the travel is a different proposition from one that starts at the top.
+    ...(isRange ? [{ key: 'usedlo', kind: 'num', dp: 0, suffix: '%', alwaysDerived: true,
+      label: 'travel used at low end',
+      num: (h) => (h.evaluation.working?.travelUsedFraction == null
+        ? null : h.evaluation.working.travelUsedFraction * 100) }] : []),
     { key: 'used', kind: 'num', dp: 0, suffix: '%', alwaysDerived: true,
-      label: isRange ? 'travel used at top' : 'travel used',
+      label: isRange ? 'travel used at high end' : 'travel used',
       num: (h) => (worst(h)?.travelUsedFraction == null ? null : worst(h).travelUsedFraction * 100) },
     { key: 'band', kind: 'num', dp: 0, suffix: '%', alwaysDerived: true,
       label: isRange ? 'force band ± at low end' : 'force band ±',
       num: (h) => (worst(h)?.worstCaseFraction == null ? null : worst(h).worstCaseFraction * 100) },
     { key: 'stress', kind: 'num', dp: 0, suffix: '%', alwaysDerived: true,
-      label: isRange ? 'stress at top' : 'stress',
+      label: isRange ? 'stress at high end' : 'stress',
       num: (h) => (worst(h)?.utilisation == null ? null : worst(h).utilisation * 100) },
     ...springColumns((h) => h.spring),
     { key: 'why', label: 'why not', kind: 'text', align: 'l', text: (h) => (h.ok ? '' : h.rejected[0] || '') },
