@@ -625,6 +625,26 @@ export function normalizeSpring(raw) {
   if (s.travelToSolid_mm != null) s.forceAtSolid_N = k * s.travelToSolid_mm;
   if (num(s.maxTemp_C) != null) s.maxTemp_F = s.maxTemp_C * 9 / 5 + 32;
 
+  // A vendor rating that sits above the allowable stress is worth explaining
+  // rather than just flagging. The default allowable here is Shigley's static
+  // figure for wire with the set NOT removed; a spring pre-set at the factory
+  // takes appreciably more, and a rating this high is itself the evidence the
+  // spring is pre-set. Both readings are given, so the number can be judged.
+  if (vendorMaxLoad != null && s.meanDia_mm != null && d != null && s.materialKey != null) {
+    const tau = shearStress({ force_N: vendorMaxLoad, D_mm: s.meanDia_mm, d_mm: d,
+      factor: staticShearFactor(s.springIndex) });
+    const plain = allowableShearStress(s.materialKey, d).tauAllow_MPa;
+    const preset = allowableShearStress(s.materialKey, d, { setRemoved: true }).tauAllow_MPa;
+    s.vendorRatingUtilisation = tau / plain;
+    s.vendorRatingUtilisationSet = tau / preset;
+    if (tau > plain) {
+      warnings.push(`At the vendor's own max load the wire sees ${(tau / plain * 100).toFixed(0)}% of the `
+        + 'stress allowed for spring wire with the set not removed, which is what this calculator assumes '
+        + `by default. Rating it that high implies the spring is pre-set at the factory; on that basis it is `
+        + `${(tau / preset * 100).toFixed(0)}%. Treat the stress figures as the conservative reading.`);
+    }
+  }
+
   return { ...s, derived, warnings, incomplete: false };
 }
 

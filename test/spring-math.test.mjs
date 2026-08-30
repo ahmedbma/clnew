@@ -630,3 +630,34 @@ test('coil shape is a category, and searchable as one', () => {
   assert.deepEqual(keys({ straightOnly: true }), ['S']);
   assert.deepEqual(keys({ systems: ['metric'] }), []);
 });
+
+test('a vendor rating above allowable is explained, not just flagged', () => {
+  // 2006N234's shape: McMaster rates this series essentially to solid height,
+  // which only works for pre-set wire. Saying "156% of allowable" and stopping
+  // there reads as a data fault; it is a different design basis.
+  const s = sm.normalizeSpring({
+    partNumber: '2006N234', material: '302 Stainless Steel', ends: 'Closed and Ground',
+    od_mm: 9.6, id_mm: 6.4, wireDia_mm: 1.6, freeLength_mm: 14.5,
+    lengthAtMaxLoad_mm: 9.0, maxLoad_N: 39 * sm.LBF_TO_N, rate_Npmm: 7 * sm.LBF_TO_N,
+  });
+  assert.ok(s.vendorRatingUtilisation > 1.5);
+  assert.ok(s.vendorRatingUtilisationSet < s.vendorRatingUtilisation);
+  const note = s.warnings.find((w) => /pre-set at the factory/.test(w));
+  assert.ok(note, 'the note is there');
+  assert.match(note, /156%/);
+  assert.match(note, /109%/);
+
+  // A spring rated well inside allowable says nothing at all about set.
+  const easy = sm.normalizeSpring({
+    material: '302 Stainless Steel', od_mm: 9.6, wireDia_mm: 1.6,
+    freeLength_mm: 14.5, rate_Npmm: 7 * sm.LBF_TO_N, maxLoad_N: 5,
+  });
+  assert.ok(easy.vendorRatingUtilisation < 1);
+  assert.ok(!easy.warnings.some((w) => /pre-set/.test(w)));
+
+  // And the search can be told to work on the pre-set basis instead.
+  const strict = sm.evaluate(s, { targetForce_N: s.maxLoad_N }).working.utilisation;
+  const preset = sm.evaluate(s, { targetForce_N: s.maxLoad_N, setRemoved: true }).working.utilisation;
+  assert.ok(preset < strict);
+  assert.ok(Math.abs(preset / strict - 0.35 / 0.50) < 1e-9, 'the two allowable fractions, nothing else');
+});

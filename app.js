@@ -461,6 +461,7 @@ function findRequirements() {
     families: $('f-family').value ? [$('f-family').value] : null,
     positionTol_mm: readLen('f-postol') ?? sm.inToMm(0.010),
     rateTol: (rawNum('f-ratetol') ?? 10) / 100,
+    setRemoved: $('f-set').value === '1',
     minDeflection_mm: readLen('f-mintravel'),
     maxTravelUsedFraction: (rawNum('f-maxtravel') ?? 100) / 100,
     materials: $('f-material').value ? [$('f-material').value] : null,
@@ -615,7 +616,7 @@ const OPTIONAL_NUMBERS = ['f-minod', 'f-maxod', 'f-minid', 'f-maxid', 'f-minwire
   'f-minfree', 'f-maxfree', 'f-maxinst', 'f-maxsolid', 'f-minrate', 'f-maxrate', 'f-minload',
   'f-mintravel', 'f-maxtravel', 'f-mintemp', 'f-postol', 'f-ratetol'];
 const OPTIONAL_SELECTS = { 'f-material': '', 'f-ends': '', 'f-shape': '', 'f-family': '',
-  'f-system': '', 'f-cut': '', 'f-sort': 'robustness' };
+  'f-system': '', 'f-cut': '', 'f-set': '', 'f-sort': 'robustness' };
 
 /**
  * Inputs whose meaning depends on the length unit. With one diameter box the

@@ -121,6 +121,17 @@ Shear modulus is identical across all of these grades, so rate, coil count, soli
 length and every force figure never depended on any of it. Only the stress column
 does.
 
+**Two stress bases, and which one is shown.** The allowable stress used by default
+is Shigley's static figure for wire with the **set not removed** — 35% of Sut for
+austenitic stainless, 45% for music wire. A spring pre-set at the factory takes
+appreciably more (50% and 60%), and the search accepts `setRemoved: true` for that
+reading. 203 of the 2,597 springs are rated by their vendor above the conservative
+allowable; each says so in its notes, with both percentages, because a rating that
+high is itself evidence the spring is pre-set. The largest group by far is
+McMaster's **2006N** series (177 rows), which is rated essentially to solid height:
+a median of 91% of the travel to solid, against 60% for the 8969T series of the
+same alloy and geometry.
+
 To update it: print the vendor's filtered listing to PDF, run the extractor, and
 commit the result. To add springs by hand instead, paste them into the Catalogue
 tab, click **Download as JSON**, and commit that.

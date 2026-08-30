@@ -347,6 +347,13 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
           <input type="number" id="f-postol" placeholder="assumes 0.010 in" step="any"></div>
         <div><label for="f-ratetol">Spring rate tolerance &plusmn;%</label>
           <input type="number" id="f-ratetol" placeholder="assumes 10%" step="any"></div>
+        <div><label for="f-set">Wire condition</label>
+          <select id="f-set">
+            <option value="">set not removed &mdash; conservative</option>
+            <option value="1">set removed / pre-set</option>
+          </select>
+          <div class="hint">Pre-set springs take appreciably more stress. Vendors that rate a spring
+            close to solid are relying on it; the notes say which ones.</div></div>
         <div><label for="f-sort">Rank by</label>
           <select id="f-sort">
             <option value="robustness">best all-round</option>
@@ -1155,6 +1162,26 @@ function normalizeSpring(raw) {
   }
   if (s.travelToSolid_mm != null) s.forceAtSolid_N = k * s.travelToSolid_mm;
   if (num(s.maxTemp_C) != null) s.maxTemp_F = s.maxTemp_C * 9 / 5 + 32;
+
+  // A vendor rating that sits above the allowable stress is worth explaining
+  // rather than just flagging. The default allowable here is Shigley's static
+  // figure for wire with the set NOT removed; a spring pre-set at the factory
+  // takes appreciably more, and a rating this high is itself the evidence the
+  // spring is pre-set. Both readings are given, so the number can be judged.
+  if (vendorMaxLoad != null && s.meanDia_mm != null && d != null && s.materialKey != null) {
+    const tau = shearStress({ force_N: vendorMaxLoad, D_mm: s.meanDia_mm, d_mm: d,
+      factor: staticShearFactor(s.springIndex) });
+    const plain = allowableShearStress(s.materialKey, d).tauAllow_MPa;
+    const preset = allowableShearStress(s.materialKey, d, { setRemoved: true }).tauAllow_MPa;
+    s.vendorRatingUtilisation = tau / plain;
+    s.vendorRatingUtilisationSet = tau / preset;
+    if (tau > plain) {
+      warnings.push(`At the vendor's own max load the wire sees ${(tau / plain * 100).toFixed(0)}% of the `
+        + 'stress allowed for spring wire with the set not removed, which is what this calculator assumes '
+        + `by default. Rating it that high implies the spring is pre-set at the factory; on that basis it is `
+        + `${(tau / preset * 100).toFixed(0)}%. Treat the stress figures as the conservative reading.`);
+    }
+  }
 
   return { ...s, derived, warnings, incomplete: false };
 }
@@ -2918,6 +2945,7 @@ function findRequirements() {
     families: $('f-family').value ? [$('f-family').value] : null,
     positionTol_mm: readLen('f-postol') ?? sm.inToMm(0.010),
     rateTol: (rawNum('f-ratetol') ?? 10) / 100,
+    setRemoved: $('f-set').value === '1',
     minDeflection_mm: readLen('f-mintravel'),
     maxTravelUsedFraction: (rawNum('f-maxtravel') ?? 100) / 100,
     materials: $('f-material').value ? [$('f-material').value] : null,
@@ -3072,7 +3100,7 @@ const OPTIONAL_NUMBERS = ['f-minod', 'f-maxod', 'f-minid', 'f-maxid', 'f-minwire
   'f-minfree', 'f-maxfree', 'f-maxinst', 'f-maxsolid', 'f-minrate', 'f-maxrate', 'f-minload',
   'f-mintravel', 'f-maxtravel', 'f-mintemp', 'f-postol', 'f-ratetol'];
 const OPTIONAL_SELECTS = { 'f-material': '', 'f-ends': '', 'f-shape': '', 'f-family': '',
-  'f-system': '', 'f-cut': '', 'f-sort': 'robustness' };
+  'f-system': '', 'f-cut': '', 'f-set': '', 'f-sort': 'robustness' };
 
 /**
  * Inputs whose meaning depends on the length unit. With one diameter box the
