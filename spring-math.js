@@ -898,6 +898,14 @@ export function evaluate(springIn, opts = {}) {
   const where = (w) => (high ? (w === high ? ' at the top of the band' : ' at the bottom of the band') : '');
   const check = (w) => {
     if (w.deflection_mm <= 0) reasons.push('Target force is zero or negative.');
+    // This one needs nothing from the vendor: a spring cannot be compressed by
+    // more than its own free length, whatever it does or does not publish about
+    // solid height. Both checks below are gated on numbers that conical and
+    // square-wire stock do not carry, so without this those springs pass with a
+    // working point that is physically off the end of the spring.
+    if (s.freeLength_mm != null && w.deflection_mm >= s.freeLength_mm) {
+      reasons.push(`Would have to compress ${w.deflection_mm.toFixed(2)} mm${where(w)} to reach this force, but the spring is only ${s.freeLength_mm.toFixed(2)} mm long to begin with.`);
+    }
     if (s.usableTravel_mm != null && w.deflection_mm > s.usableTravel_mm) {
       reasons.push(`Needs ${w.deflection_mm.toFixed(2)} mm of travel${where(w)} but only ${s.usableTravel_mm.toFixed(2)} mm is usable (${s.usableTravelSource}).`);
     }

@@ -53,6 +53,14 @@ function L(mm, { both = false } = {}) {
   return `${main} (${inch ? `${nf(mm, 2)} mm` : `${nf(sm.mmToIn(mm), 3)} in`})`;
 }
 const Lnum = (mm) => (mm == null ? '—' : state.lengthUnit === 'in' ? nf(sm.mmToIn(mm), 3) : nf(mm, 2));
+/**
+ * Free length minus deflection is only a length while the spring still has one.
+ * Past that the number is an artefact of extending F = k x beyond the spring,
+ * and a negative millimetre reads as a measurement rather than as nonsense --
+ * so those rows show a blank. The search rejects them; this is what keeps the
+ * number off the screen when "show everything" puts the rejects back.
+ */
+const realLength = (mm) => (mm != null && Number.isFinite(mm) && mm > 0 ? mm : null);
 const Lunit = () => (state.lengthUnit === 'in' ? 'in' : 'mm');
 
 function F(N, { both = false } = {}) {
@@ -259,7 +267,7 @@ function workingList(ev) {
     <dt>force</dt><dd>${F(w.targetForce_N, { both: true })}${hi ? to + F(hi.targetForce_N, { both: true }) : ''}</dd>
     <dt>compress by</dt><dd>${L(w.deflection_mm, { both: true })}${hi ? to + L(hi.deflection_mm, { both: true }) : ''}</dd>
     ${hi ? `<dt>band stroke</dt><dd>${L(ev.range.stroke_mm, { both: true })} of travel to sweep the band</dd>` : ''}
-    <dt>installed length</dt><dd>${L(w.installedLength_mm, { both: true })}${hi ? to + L(hi.installedLength_mm, { both: true }) : ''}</dd>
+    <dt>installed length</dt><dd>${L(realLength(w.installedLength_mm), { both: true })}${hi ? to + L(realLength(hi.installedLength_mm), { both: true }) : ''}</dd>
     <dt>travel used</dt><dd>${hi ? `${pct(w.travelUsedFraction)}${to}${pct(hi.travelUsedFraction)}` : pct(w.travelUsedFraction)} of usable, ${L(worst.travelHeadroom_mm)} spare at the top</dd>
     <dt>shear stress</dt><dd>${nf((hi || w).tauStatic_MPa, 0)} MPa = ${pct(worst.utilisation)} of allowable${hi ? ' at the top of the band' : ''}</dd>
     <dt>force you get</dt><dd>${F(sen.forceRange_N[0])} to ${F(sen.forceRange_N[1])} ${hi ? '<span class="muted">asking for ' + F(w.targetForce_N) + '</span>' : ''}</dd>
@@ -367,6 +375,9 @@ function forceChart(s, ev) {
 
   const xMin = s.solidLength_mm ?? s.freeLength_mm - (s.usableTravel_mm ?? 0);
   const xMax = s.freeLength_mm;
+  // Springs that publish neither a solid height nor a travel limit leave these
+  // equal, and every coordinate below divides by the difference.
+  if (!(xMax > xMin)) return null;
   const hi = ev.workingHigh;
   const yMax = Math.max(s.rate_Npmm * (xMax - xMin), (hi || w).targetForce_N) * 1.08;
   const X = (mm) => m.l + ((mm - xMin) / (xMax - xMin)) * plotW;
@@ -1373,9 +1384,9 @@ function findColumns(isRange) {
         num: (h) => h.evaluation.working?.deflection_mm },
     { key: 'installed', spring: (h) => h.spring, unit: 'length', kind: 'num', alwaysDerived: true,
       label: isRange ? 'lg at low end' : 'installed lg',
-      num: (h) => h.evaluation.working?.installedLength_mm },
+      num: (h) => realLength(h.evaluation.working?.installedLength_mm) },
     ...(isRange ? [{ key: 'installed2', spring: (h) => h.spring, label: 'lg at high end', unit: 'length',
-      kind: 'num', alwaysDerived: true, num: (h) => h.evaluation.workingHigh?.installedLength_mm }] : []),
+      kind: 'num', alwaysDerived: true, num: (h) => realLength(h.evaluation.workingHigh?.installedLength_mm) }] : []),
     { key: 'used', kind: 'num', dp: 0, suffix: '%', alwaysDerived: true,
       label: isRange ? 'travel used at top' : 'travel used',
       num: (h) => (worst(h)?.travelUsedFraction == null ? null : worst(h).travelUsedFraction * 100) },

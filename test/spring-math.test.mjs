@@ -275,6 +275,35 @@ test('evaluate places the working point and reports headroom', () => {
   assert.ok(tooMuch.reasons.some((r) => /travel/.test(r)));
 });
 
+test('no spring is ever worked past its own free length', () => {
+  // The awkward case: a spring that publishes a rate and a free length but
+  // neither a solid height nor a travel limit, which is what conical and
+  // square-wire stock look like. Both of the usual travel checks are gated on
+  // data it does not have, so only the free length itself can catch this.
+  const s = sm.normalizeSpring({
+    partNumber: 'nolimits', freeLength_mm: 31.75, rate_Npmm: 0.4378, material: 'Conical',
+  });
+  assert.equal(s.solidLength_mm, null);
+  assert.equal(s.usableTravel_mm, null);
+
+  const reachable = 0.4378 * 31.75;   // the load at exactly free length
+  const ok = sm.evaluate(s, { targetForce_N: reachable * 0.5 });
+  assert.equal(ok.feasible, true);
+  assert.ok(ok.working.installedLength_mm > 0);
+
+  const past = sm.evaluate(s, { targetForce_N: reachable * 1.2 });
+  assert.equal(past.feasible, false, 'a working point off the end of the spring must not pass');
+  assert.ok(past.reasons.some((r) => /only 31.75 mm long/.test(r)), past.reasons.join(' | '));
+
+  // And the same at the top of a band, where the low end alone is fine.
+  const band = sm.evaluate(s, { targetForce_N: reachable * 0.5, targetForceHigh_N: reachable * 1.2 });
+  assert.equal(band.feasible, false);
+  assert.ok(band.reasons.some((r) => /top of the band/.test(r)));
+  // Nothing that passes may report a negative length.
+  assert.equal(sm.searchCatalog([s], { targetForce_N: reachable * 1.2 })
+    .filter((r) => r.ok).length, 0);
+});
+
 test('a force band is two working points on one line', () => {
   const s = sm.normalizeSpring({ od_mm: 10, wireDia_mm: 1, freeLength_mm: 20, totalCoils: 12 });
   const ev = sm.evaluate(s, { targetForce_N: 1.5, targetForceHigh_N: 6 });
