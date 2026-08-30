@@ -30,6 +30,74 @@ export const nPerMmToLbfPerIn = (v) => v / LBF_PER_IN_TO_N_PER_MM;
 export const psiToMpa = (v) => v * PSI_TO_MPA;
 export const mpaToPsi = (v) => v / PSI_TO_MPA;
 
+/**
+ * Every unit a catalogue is published in, as a factor onto the SI unit the
+ * engine stores (mm, N, N/mm). Vendors mix them within one table -- McMaster's
+ * metric springs give lengths in mm but loads in lb and rates in lbf/mm -- so
+ * a unit is a property of a quantity, never of a whole spring.
+ */
+export const UNIT_FACTORS = {
+  length: { mm: 1, cm: 10, m: 1000, in: IN_TO_MM },
+  force: { N: 1, kN: 1000, lbf: LBF_TO_N, ozf: 0.2780138509, kgf: 9.80665, gf: 0.00980665 },
+  rate: { 'N/mm': 1, 'N/m': 0.001, 'lbf/in': LBF_PER_IN_TO_N_PER_MM, 'lbf/mm': LBF_TO_N, 'kgf/mm': 9.80665 },
+};
+export const toSI = (v, quantity, unit) => {
+  const f = UNIT_FACTORS[quantity]?.[unit];
+  return f == null || v == null ? null : v * f;
+};
+export const fromSI = (v, quantity, unit) => {
+  const f = UNIT_FACTORS[quantity]?.[unit];
+  return f == null || v == null ? null : v / f;
+};
+export const cToF = (v) => v * 9 / 5 + 32;
+export const fToC = (v) => (v - 32) * 5 / 9;
+
+/** The two systems a part is catalogued under, and what each publishes in. */
+export const UNIT_SYSTEMS = {
+  inch: { name: 'Inch', units: { length: 'in', force: 'lbf', rate: 'lbf/in', temp: 'F' } },
+  metric: { name: 'Metric', units: { length: 'mm', force: 'N', rate: 'N/mm', temp: 'C' } },
+};
+
+/**
+ * Accept whatever a record carries -- 'in', 'mm', or a per-quantity object --
+ * and return the full per-quantity form. Anything unstated falls back to the
+ * conventional unit for the system the lengths are in.
+ */
+export function normalizeSourceUnits(u) {
+  if (typeof u === 'string') return { ...UNIT_SYSTEMS[u === 'mm' ? 'metric' : 'inch'].units };
+  const given = u && typeof u === 'object' ? u : {};
+  const base = UNIT_SYSTEMS[given.length === 'mm' ? 'metric' : 'inch'].units;
+  const out = { ...base };
+  for (const q of ['length', 'force', 'rate', 'temp']) {
+    if (given[q]) out[q] = given[q];
+  }
+  return out;
+}
+
+/* ----------------------------------------------------------- coil shapes */
+
+/**
+ * The coil form. Only a straight cylindrical spring has one rate all the way
+ * down; everything else stiffens as coils close, which the constant-rate maths
+ * here cannot follow.
+ */
+export const SHAPES = {
+  straight: { name: 'Straight', constantRate: true, aliases: ['straight', 'cylindrical', 'standard'] },
+  conical: { name: 'Conical', constantRate: false, aliases: ['conical', 'tapered', 'cone'] },
+  barrel: { name: 'Barrel', constantRate: false, aliases: ['barrel', 'convex'] },
+  hourglass: { name: 'Hourglass', constantRate: false, aliases: ['hourglass', 'concave'] },
+};
+
+export function resolveShape(text) {
+  if (!text) return null;
+  const t = String(text).toLowerCase();
+  if (SHAPES[t]) return t;
+  for (const [key, sh] of Object.entries(SHAPES)) {
+    if (sh.aliases.some((a) => t.includes(a))) return key;
+  }
+  return null;
+}
+
 /* -------------------------------------------------------------- materials */
 
 /**
@@ -346,6 +414,21 @@ export function normalizeSpring(raw) {
   const derived = [];
   const warnings = [];
 
+  // Units, and the system the part is catalogued under. Both are recorded so
+  // a table can show the vendor's own numbers next to the converted ones.
+  s.sourceUnits = normalizeSourceUnits(s.sourceUnits);
+  if (!s.system) {
+    s.system = s.sourceUnits.length === 'mm' ? 'metric' : 'inch';
+    derived.push('system');
+  }
+
+  // Coil form. `nonLinearShape` was the old free-text field and still works as
+  // an input; everything downstream now reads shapeKey.
+  s.shapeKey = resolveShape(s.shape) || resolveShape(s.nonLinearShape)
+    || resolveShape(s.family) || 'straight';
+  if (!s.shape && !s.nonLinearShape) derived.push('shapeKey');
+  if (s.shapeKey !== 'straight' && !s.nonLinearShape) s.nonLinearShape = SHAPES[s.shapeKey].name;
+
   // Cut-to-length stock is a different thing to buy: you get a long coil and
   // cut what you need. Vendors do not flag it in a field, only in the product
   // family, so read it from there unless the record says outright.
@@ -356,11 +439,6 @@ export function normalizeSpring(raw) {
     derived.push('cutToLength');
   } else {
     s.cutToLength = Boolean(s.cutToLength);
-  }
-  if (s.cutToLength) {
-    warnings.push('Sold as cut-to-length stock: the free length is the length of the coil you buy, '
-      + 'and the rate holds for that whole length. Cut it shorter and you remove active coils, '
-      + 'so the rate goes up roughly in proportion - half the length is about twice the rate.');
   }
 
   // A material named but not recognised is left unknown: inventing properties
@@ -399,9 +477,10 @@ export function normalizeSpring(raw) {
   const roundWire = od != null && d != null && s.materialKey != null;
   // Cut-to-length stock is sold by the metre and cut to suit; its published
   // rate belongs to the full uncut length, and cutting it changes the rate.
-  if (/cut-to-length/i.test(s.family || '')) {
-    warnings.push('Sold as cut-to-length stock. The published rate is for the full uncut length - '
-      + 'cutting it shortens the coil count and stiffens the spring in proportion.');
+  if (s.cutToLength) {
+    warnings.push('Sold as cut-to-length stock: the free length is the length of the coil you buy, and '
+      + 'the published rate is for that whole length. Cutting it removes active coils and stiffens the '
+      + 'spring in proportion - half the length is about twice the rate.');
   }
   if (rectangularWire) {
     // Say what the section actually is: these are square, rectangular or
@@ -697,6 +776,8 @@ export function evaluate(springIn, opts = {}) {
  *   materials                array of material keys to allow
  *   minTravelHeadroom_mm     insist on this much unused travel
  *   maxTravelUsedFraction    e.g. 0.8 -- do not sit near the travel limit
+ *   shapes                   ['straight', 'conical', ...] -- coil forms to keep
+ *   systems                  ['inch'] or ['metric'] -- how the part is catalogued
  *   cutToLength              'any' | 'exclude' | 'only' -- long stock you cut yourself
  *   sortBy                   'robustness' | 'travel' | 'compact' | 'rate' | 'force-precision'
  */
@@ -712,6 +793,7 @@ export function searchCatalog(springs, req = {}) {
     minRatedLoad_N = null,
     minTemperature_C = null,
     straightOnly = false,
+    shapes = null, systems = null,
     cutToLength = 'any',
     materials = null, ends = null, families = null,
     minTravelHeadroom_mm = 0,
@@ -747,7 +829,9 @@ export function searchCatalog(springs, req = {}) {
     if (minTemperature_C != null && s.maxTemp_C != null && s.maxTemp_C < minTemperature_C) {
       rejected.push(`Rated to ${s.maxTemp_C.toFixed(0)} C, below the ${minTemperature_C.toFixed(0)} C asked for.`);
     }
-    if (straightOnly && s.nonLinearShape) rejected.push(`Listed as ${s.nonLinearShape}, not a straight cylindrical spring.`);
+    if (straightOnly && s.shapeKey !== 'straight') rejected.push(`Listed as ${SHAPES[s.shapeKey].name}, not a straight cylindrical spring.`);
+    if (shapes && shapes.length && !shapes.includes(s.shapeKey)) rejected.push(`${SHAPES[s.shapeKey].name} coil shape excluded.`);
+    if (systems && systems.length && !systems.includes(s.system)) rejected.push(`${UNIT_SYSTEMS[s.system]?.name || s.system} parts excluded.`);
     if (cutToLength === 'exclude' && s.cutToLength) rejected.push('Cut-to-length stock, excluded.');
     if (cutToLength === 'only' && !s.cutToLength) rejected.push('Not cut-to-length stock.');
     if (materials && materials.length && !materials.includes(s.materialKey)) rejected.push('Material excluded.');

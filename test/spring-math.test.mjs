@@ -542,7 +542,9 @@ test('cut-to-length stock is flagged, warned about and filterable', () => {
   assert.ok(stock.derived.includes('cutToLength'));
   // The rate is only the rate at the length you buy -- cutting changes it,
   // and a search that hid that would be lying about the force.
-  assert.ok(stock.warnings.some((w) => /half the length is about twice the rate/.test(w)));
+  const cutNotes = stock.warnings.filter((w) => /cut-to-length stock/i.test(w));
+  assert.equal(cutNotes.length, 1, 'said once, not twice');
+  assert.match(cutNotes[0], /half the length is about twice the rate/);
 
   const made = sm.normalizeSpring({
     partNumber: 'X2', family: 'Compression Springs',
@@ -566,4 +568,65 @@ test('cut-to-length stock is flagged, warned about and filterable', () => {
   // Excluded is not the same as unexplained: the row still says why.
   const [why] = sm.searchCatalog([stock], { targetForce_N: 2, cutToLength: 'exclude', includeRejected: true });
   assert.match(why.rejected.join(' '), /Cut-to-length stock, excluded/);
+});
+
+test('a spring keeps the units it was published in, per quantity', () => {
+  // McMaster's metric tables are not metric throughout: millimetres for
+  // lengths, but pounds for load and lbf per millimetre for rate. Collapsing
+  // that to one "metric" flag would misreport every load in the listing.
+  const u = sm.normalizeSourceUnits({ length: 'mm', force: 'lbf', rate: 'lbf/mm' });
+  assert.deepEqual(u, { length: 'mm', force: 'lbf', rate: 'lbf/mm', temp: 'C' });
+  // The old shorthand still means what it always did.
+  assert.deepEqual(sm.normalizeSourceUnits('in'), { length: 'in', force: 'lbf', rate: 'lbf/in', temp: 'F' });
+  assert.deepEqual(sm.normalizeSourceUnits('mm'), { length: 'mm', force: 'N', rate: 'N/mm', temp: 'C' });
+  assert.deepEqual(sm.normalizeSourceUnits(undefined), sm.normalizeSourceUnits('in'));
+
+  // 1 lbf/mm is a pound per millimetre, not per inch.
+  assert.equal(sm.toSI(1, 'rate', 'lbf/mm'), sm.LBF_TO_N);
+  assert.equal(sm.toSI(1, 'rate', 'lbf/in'), sm.LBF_PER_IN_TO_N_PER_MM);
+  // Every factor round-trips, which is all the display layer relies on.
+  for (const [q, table] of Object.entries(sm.UNIT_FACTORS)) {
+    for (const unit of Object.keys(table)) {
+      assert.ok(Math.abs(sm.fromSI(sm.toSI(7, q, unit), q, unit) - 7) < 1e-9, `${q}/${unit}`);
+    }
+  }
+
+  const metric = sm.normalizeSpring({
+    od_mm: 5.5, id_mm: 4.5, wireDia_mm: 0.5, freeLength_mm: 9.4,
+    rate_Npmm: 0.33 * sm.LBF_TO_N, material: 'Music Wire',
+    sourceUnits: { length: 'mm', force: 'lbf', rate: 'lbf/mm' },
+  });
+  assert.equal(metric.system, 'metric');
+  assert.equal(metric.sourceUnits.force, 'lbf');
+  // The engine stores SI regardless, so the physics is untouched by any of it.
+  assert.ok(Math.abs(metric.rate_Npmm - 1.4679) < 1e-3);
+  assert.equal(sm.normalizeSpring({ od_mm: 5, sourceUnits: 'in' }).system, 'inch');
+  // A stated system is never overridden by the units.
+  assert.equal(sm.normalizeSpring({ od_mm: 5, system: 'metric', sourceUnits: 'in' }).system, 'metric');
+});
+
+test('coil shape is a category, and searchable as one', () => {
+  const straight = sm.normalizeSpring({ od_mm: 10, wireDia_mm: 1, freeLength_mm: 40, rate_Npmm: 2, partNumber: 'S' });
+  assert.equal(straight.shapeKey, 'straight');
+  assert.ok(!straight.warnings.some((w) => /rather than a straight/.test(w)));
+
+  // Whether the form is named in a field or only in the family, it is read.
+  const cone = sm.normalizeSpring({
+    od_mm: 10, wireDia_mm: 1, freeLength_mm: 40, rate_Npmm: 2,
+    partNumber: 'C', family: 'Conical Compression Springs',
+  });
+  assert.equal(cone.shapeKey, 'conical');
+  assert.equal(sm.normalizeSpring({ od_mm: 10, shape: 'Tapered' }).shapeKey, 'conical');
+  assert.equal(sm.normalizeSpring({ od_mm: 10, nonLinearShape: 'barrel' }).shapeKey, 'barrel');
+  // A conical spring does not have one rate, and the report has to say so.
+  assert.ok(cone.warnings.some((w) => /stiffen as their coils close/.test(w)));
+
+  const springs = [straight, cone];
+  const keys = (req) => sm.searchCatalog(springs, { targetForce_N: 2, ...req })
+    .filter((r) => r.ok).map((r) => r.spring.partNumber);
+  assert.deepEqual(keys({}).sort(), ['C', 'S']);
+  assert.deepEqual(keys({ shapes: ['straight'] }), ['S']);
+  assert.deepEqual(keys({ shapes: ['conical'] }), ['C']);
+  assert.deepEqual(keys({ straightOnly: true }), ['S']);
+  assert.deepEqual(keys({ systems: ['metric'] }), []);
 });

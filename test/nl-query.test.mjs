@@ -180,3 +180,12 @@ test('cut-to-length is asked for, or asked away, in plain words', () => {
   const res = parseQuery('1.5N, no cut-to-length');
   assert.ok(res.read.some((r) => r.field === 'cutToLength' && r.value === 'excluded'));
 });
+
+test('a measurement system or a coil shape can be asked for in words', () => {
+  assert.equal(f('1.5N metric springs only').system, 'metric');
+  assert.equal(f('1.5N in inch sizes').system, 'inch');
+  assert.equal(f('1.5N in a half inch bore').system, undefined, 'a bore in inches is not a system');
+  assert.equal(f('1.5N conical').shapeKey, 'conical');
+  assert.equal(f('1.5N tapered spring').shapeKey, 'conical');
+  assert.equal(f('1.5N straight only').shapeKey, 'straight');
+});

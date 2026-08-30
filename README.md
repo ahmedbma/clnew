@@ -66,31 +66,41 @@ maximum, because diameter is only filtered as an upper bound.
 
 ## The shared catalogue
 
-`data/catalogue.json` carries **1,566 McMaster-Carr straight compression springs,
-inch sizes** — the vendor's full filtered listing, extracted from their own
-catalogue PDF on 2026-08-29. Every visitor gets them on first load, in any
-browser, with nothing to paste. Each row keeps its part number and a link back to
-the vendor page.
+`data/catalogue.json` carries **2,597 McMaster-Carr straight compression springs**
+— the vendor's full filtered listings for both inch and metric sizes, extracted
+from their own catalogue PDFs on 2026-08-29. Every visitor gets them on first
+load, in any browser, with nothing to paste. Each row keeps its part number and a
+link back to the vendor page. No part number appears in both listings.
 
-The listing is five product families printed with **different columns**, so
-`tools/extract-mcmaster-pdf.py` parses each with its own pattern — one pattern
-across all of them would silently shift values into the wrong fields. Every
-parsed row is then checked against the vendor's own arithmetic: rate x (free
+The listings print **different columns per product family**, so each has its own
+pattern — one pattern across all of them would silently shift values into the
+wrong fields. `tools/extract-mcmaster-pdf.py` reads the inch listing (five
+families) and `tools/extract-mcmaster-metric-pdf.py` the metric one (two). Both
+scripts then check every row against the vendor's own arithmetic: rate x (free
 length − compressed length at max load) must reproduce the published max load.
-1,496 of the 1,504 checkable rows agree within 12%; the 8 that do not were
-inspected by hand against the source and are vendor inconsistencies, not parse
-errors. Coil counts derived from the published rates round-trip back to those
-rates exactly.
 
-| Family | Rows | Note |
-|---|---|---|
-| Compression Springs | 1,125 | finished parts |
-| Cut-to-Length | 166 | sold as stock; cutting changes the rate, so each is flagged |
-| Precision | 139 | carry their own OD and rate tolerances |
-| Mil. Spec. | 114 | keep their MS part number |
-| Plastic (Ultem PEI) | 22 | moulded, rectangular section |
+| Family | Inch | Metric | Note |
+|---|---|---|---|
+| Compression Springs | 1,125 | 995 | finished parts |
+| Cut-to-Length | 166 | — | sold as stock; cutting changes the rate, so each is flagged |
+| Precision | 139 | 36 | carry their own OD and rate tolerances |
+| Mil. Spec. | 114 | — | keep their MS part number |
+| Plastic (Ultem PEI) | 22 | — | moulded, rectangular section |
 
-**One inference, since confirmed.** McMaster labels 947 of these "Spring Steel"
+Of the inch rows, 1,496 of 1,504 checkable agree within 12%; of the metric rows,
+968 of 1,031. Allowing for the rounding McMaster actually prints, 63 metric rows
+still cannot be reconciled — their own rate, travel and max load do not multiply
+out. Those are vendor inconsistencies, not parse errors: each is kept as
+published and carries a note saying so. Coil counts derived from the published
+rates round-trip back to those rates exactly.
+
+**Metric parts are not metric throughout.** McMaster publishes those lengths in
+millimetres but the max load in pounds and the spring rate in **lbf per
+millimetre**. Each quantity is stored in the unit it was published in, so the
+tables can show a part exactly as its vendor printed it, and convert on request
+rather than by default.
+
+**One inference, since confirmed.** McMaster labels 947 inch rows "Spring Steel"
 without naming a grade in the listing. Their properties are taken as music wire
 (ASTM A228). That was first inferred from McMaster's own published max loads —
 assuming hard-drawn A227 puts 513 of 1,523 springs above allowable stress *at their
@@ -102,6 +112,10 @@ The 56 springs of the **96485K** series are the exception. Their pages name no s
 grade, rate to 300 °F where music wire and hard-drawn reach only 250 °F, and the
 series runs to 0.625 in wire — far beyond the range music wire is drawn in. They
 are taken as oil-tempered A229, the 300 °F grade.
+
+The 54 metric rows labelled "Spring Steel" are DIN 17223 wire and are taken as
+music wire on the same test: hard-drawn puts 22 of the 54 above allowable stress
+at their own published rating, music wire leaves none.
 
 Shear modulus is identical across all of these grades, so rate, coil count, solid
 length and every force figure never depended on any of it. Only the stress column

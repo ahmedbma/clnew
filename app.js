@@ -27,7 +27,8 @@ const state = {
   selected: null,
   cat: { sort: { key: null, dir: 'asc' }, filters: {} },
   find: { sort: { key: null, dir: 'asc' }, filters: {} },
-  catUnits: 'in',
+  units: 'published',  // 'published' | 'in' | 'mm' -- how the tables show numbers
+  showBoth: false,     // pair every number with its reading in the other system
 };
 
 /**
@@ -114,6 +115,8 @@ function loadStore() {
     }
     state.local = cat.fromCatalogJson(data);
     state.hidden = new Set(Array.isArray(data.hidden) ? data.hidden : []);
+    if (['published', 'in', 'mm'].includes(data.units)) state.units = data.units;
+    state.showBoth = Boolean(data.showBoth);
   } catch (e) {
     state.local = [];
     state.hidden = new Set();
@@ -130,6 +133,8 @@ function saveStore() {
     const payload = cat.toCatalogJson(state.local);
     payload.hidden = [...state.hidden];
     payload.resetToken = RESET_TOKEN;
+    payload.units = state.units;
+    payload.showBoth = state.showBoth;
     localStorage.setItem(STORE_KEY, JSON.stringify(payload));
     state.storeError = null;
   } catch (e) {
@@ -449,7 +454,8 @@ function findRequirements() {
     maxRate_Npmm: readRate('f-maxrate'),
     minRatedLoad_N: readForce('f-minload', 'f-force-u'),
     minTemperature_C: readTemp('f-mintemp', 'f-temp-u'),
-    straightOnly: $('f-shape').value === 'straight',
+    shapes: $('f-shape').value ? [$('f-shape').value] : null,
+    systems: $('f-system').value ? [$('f-system').value] : null,
     cutToLength: $('f-cut').value || 'any',
     ends: $('f-ends').value ? [$('f-ends').value] : null,
     families: $('f-family').value ? [$('f-family').value] : null,
@@ -560,6 +566,15 @@ function renderResults(req) {
   }
 }
 
+/**
+ * Redraw whichever tables are on screen. A unit change rewrites headings as
+ * well as cells, so it needs a full rebuild, not the tbody-only refresh.
+ */
+function redrawTables() {
+  if (!$('tab-catalog').hidden) renderCatalogue(); else state.catalogueStale = true;
+  if (!$('tab-find').hidden && state.results.length) runFind();
+}
+
 function showDetail(h) {
   if (!h) return;
   state.selected = h;
@@ -600,7 +615,7 @@ const OPTIONAL_NUMBERS = ['f-minod', 'f-maxod', 'f-minid', 'f-maxid', 'f-minwire
   'f-minfree', 'f-maxfree', 'f-maxinst', 'f-maxsolid', 'f-minrate', 'f-maxrate', 'f-minload',
   'f-mintravel', 'f-maxtravel', 'f-mintemp', 'f-postol', 'f-ratetol'];
 const OPTIONAL_SELECTS = { 'f-material': '', 'f-ends': '', 'f-shape': '', 'f-family': '',
-  'f-cut': '', 'f-sort': 'robustness' };
+  'f-system': '', 'f-cut': '', 'f-sort': 'robustness' };
 
 /**
  * Inputs whose meaning depends on the length unit. With one diameter box the
@@ -656,7 +671,7 @@ const NL_LABELS = {
   minWireDia: 'min wire', maxWireDia: 'max wire',
   minRate: 'min rate', maxRate: 'max rate',
   material: 'material', ends: 'end type', sortBy: 'rank by',
-  cutToLength: 'cut-to-length',
+  cutToLength: 'cut-to-length', system: 'catalogued in', shape: 'coil shape',
 };
 
 function applyParse(res) {
@@ -682,6 +697,8 @@ function applyParse(res) {
   if (f.endsKey) $('f-ends').value = f.endsKey;
   if (f.sortBy) $('f-sort').value = f.sortBy;
   if (f.cutToLength) $('f-cut').value = f.cutToLength === 'exclude' ? 'exclude' : 'only';
+  if (f.system) $('f-system').value = f.system;
+  if (f.shapeKey) $('f-shape').value = f.shapeKey;
   // Show the filters it set, so nothing is applied out of sight.
   if (Object.keys(f).some((k) => k !== 'force_N' && k !== 'forceUnit' && k !== 'forceValue')) {
     $('f-more').open = true;
@@ -723,6 +740,12 @@ $('f-run').addEventListener('click', runFind);
 $('f-len-u').addEventListener('change', () => { setLengthUnit($('f-len-u').value); runFind(); runAnalyse(); });
 document.querySelectorAll('#tab-find input, #tab-find select').forEach((x) =>
   x.addEventListener('keydown', (e) => { if (e.key === 'Enter') runFind(); }));
+// A dropdown is a decision, not a half-typed number, so it re-runs the search
+// straight away. The unit pickers have their own handlers and are left alone.
+const UNIT_PICKERS = new Set(['f-len-u', 'f-force-u', 'f-temp-u']);
+document.querySelectorAll('#tab-find select').forEach((x) => {
+  if (!UNIT_PICKERS.has(x.id)) x.addEventListener('change', () => { if (state.results.length) runFind(); });
+});
 $('f-force').addEventListener('input', renderEquivalents);
 $('f-force-u').addEventListener('change', () => { renderEquivalents(); refreshUnitLabels(); });
 
@@ -799,39 +822,58 @@ $('a-save').addEventListener('click', () => {
  * source they came from.
  */
 
-function catalogueUnits() {
-  const seen = new Set(state.catalogue.map((s) => s.sourceUnits || state.lengthUnit));
-  return seen.size === 1 ? [...seen][0] : state.lengthUnit;
+/**
+ * Which unit a cell is shown in. In "as published" mode that is whatever the
+ * vendor printed for that spring and that quantity -- McMaster's metric tables
+ * give lengths in mm but loads in lb -- so it varies row by row. The other two
+ * modes convert the whole table to one system.
+ */
+const FORCED_UNITS = {
+  in: { length: 'in', force: 'lbf', rate: 'lbf/in', temp: 'F' },
+  mm: { length: 'mm', force: 'N', rate: 'N/mm', temp: 'C' },
+};
+function displayUnits(spring) {
+  return state.units === 'published'
+    ? (spring?.sourceUnits || FORCED_UNITS.in)
+    : FORCED_UNITS[state.units];
+}
+/** The spring a row describes -- a search hit wraps one, a catalogue row is one. */
+const colSpring = (col, row) => (col.spring ? col.spring(row) : row);
+function colUnit(col, row) {
+  return col.unit ? displayUnits(colSpring(col, row))[col.unit] : null;
+}
+/** The same quantity in the other system, for the paired reading. */
+const OTHER_UNIT = {
+  in: 'mm', mm: 'in', lbf: 'N', N: 'lbf', ozf: 'N', kgf: 'N', gf: 'N',
+  'lbf/in': 'N/mm', 'lbf/mm': 'N/mm', 'N/mm': 'lbf/in', 'kgf/mm': 'N/mm',
+  F: 'C', C: 'F',
+};
+
+const UNIT_LABELS = { lbf: 'lb', ozf: 'oz', kgf: 'kgf', gf: 'gf', F: '\u00b0F', C: '\u00b0C' };
+const unitLabel = (u) => (u ? UNIT_LABELS[u] || u : '');
+
+/** SI -> a named unit. Temperature is not a scale factor, so it is its own case. */
+function convert(si, quantity, unit) {
+  if (si == null || !Number.isFinite(si)) return null;
+  if (quantity === 'temp') return unit === 'F' ? sm.cToF(si) : si;
+  return sm.fromSI(si, quantity, unit);
 }
 
-/** A numeric column's value, in the units the table is showing. */
+/** A numeric column's value, in the unit that row is being shown in. */
 function colValue(col, row) {
   if (col.kind !== 'num') return null;
   const raw = col.num(row);
   if (raw == null || !Number.isFinite(raw)) return null;
-  const us = state.catUnits === 'in';
-  if (col.unit === 'length') return us ? sm.mmToIn(raw) : raw;
-  if (col.unit === 'rate') return us ? sm.nPerMmToLbfPerIn(raw) : raw;
-  if (col.unit === 'force') return us ? sm.nToLbf(raw) : raw;
-  if (col.unit === 'temp') return us ? raw * 9 / 5 + 32 : raw;
-  return raw;
+  return col.unit ? convert(raw, col.unit, colUnit(col, row)) : raw;
 }
-function colDecimals(col) {
+/** Enough decimals that the smaller unit does not round away. */
+function colDecimals(col, unit) {
   if (col.dp != null) return col.dp;
-  const us = state.catUnits === 'in';
-  if (col.unit === 'length') return us ? 3 : 2;
-  if (col.unit === 'rate') return us ? 2 : 4;
-  if (col.unit === 'force') return us ? 2 : 3;
+  if (col.unit === 'length') return unit === 'in' ? 3 : 2;
+  if (col.unit === 'rate') return unit === 'N/mm' ? 4 : 2;
+  if (col.unit === 'force') return unit === 'N' ? 3 : 2;
   if (col.unit === 'temp') return 0;
   return 2;
-}
-function colUnitLabel(col) {
-  const us = state.catUnits === 'in';
-  if (col.unit === 'length') return us ? 'in' : 'mm';
-  if (col.unit === 'rate') return us ? 'lbf/in' : 'N/mm';
-  if (col.unit === 'force') return us ? 'lb' : 'N';
-  if (col.unit === 'temp') return us ? '°F' : '°C';
-  return '';
 }
 /** Sorting uses the stored SI value, so a mixed-unit list still orders right. */
 function colSortValue(col, row) {
@@ -842,7 +884,31 @@ function colSortValue(col, row) {
 function colText(col, row) {
   if (col.kind !== 'num') return col.text(row);
   const v = colValue(col, row);
-  return v == null ? '' : nf(v, colDecimals(col)) + (col.suffix || '');
+  return v == null ? '' : nf(v, colDecimals(col, colUnit(col, row))) + (col.suffix || '');
+}
+/** The same cell read in the other system: "9.4 mm" -> "0.370 in". */
+function colAlt(col, row) {
+  if (col.kind !== 'num' || !col.unit) return '';
+  const raw = col.num(row);
+  const other = OTHER_UNIT[colUnit(col, row)];
+  if (raw == null || !Number.isFinite(raw) || !other) return '';
+  const v = convert(raw, col.unit, other);
+  return v == null ? '' : `${nf(v, colDecimals(col, other))} ${unitLabel(other)}`;
+}
+
+/**
+ * One cell. The vendor's own number leads; the other system's reading follows
+ * when asked for, and is always on the tooltip so nothing is only ever shown
+ * in units the reader does not think in.
+ */
+function cellHtml(col, row, showUnit) {
+  const text = colText(col, row);
+  if (text === '') return '';
+  const alt = colAlt(col, row);
+  const u = showUnit ? unitLabel(colUnit(col, row)) : '';
+  const tip = alt ? ` title="${esc(`${text} ${unitLabel(colUnit(col, row))} = ${alt}`)}"` : '';
+  return `<span${tip}>${esc(text)}${u ? ` <span class="u">${esc(u)}</span>` : ''}</span>${
+    state.showBoth && alt ? `<span class="alt-unit">${esc(alt)}</span>` : ''}`;
 }
 
 /** Was this cell worked out rather than read from the vendor? */
@@ -932,18 +998,30 @@ function applyFiltersAndSort(rows, columns, tState) {
  */
 function buildTable(box, spec) {
   const { columns, rows, tState, prefix, trailing, expand, rowKey, rowClass, onRowClick, cap } = spec;
-  state.catUnits = catalogueUnits();
 
   const options = {};
   columns.filter((c) => c.kind === 'select').forEach((col) => {
     options[col.key] = [...new Set(rows.map((r) => colText(col, r)).filter(Boolean))].sort();
   });
 
+  // A column's unit can differ row to row once the list mixes inch and metric
+  // parts, so work out whether one label covers the whole column or not.
+  const unitsUsed = {};
+  columns.forEach((col) => {
+    unitsUsed[col.key] = col.unit
+      ? [...new Set(rows.filter((r) => colText(col, r) !== '').map((r) => colUnit(col, r)))]
+      : [];
+  });
+  const mixed = (col) => unitsUsed[col.key].length > 1;
+
   const heads = columns.map((col) => {
-    const unit = colUnitLabel(col);
+    const us = unitsUsed[col.key].map(unitLabel);
+    const unit = us.length ? us.join(' / ') : '';
     const der = derivedLabel(col, rows);
+    const tip = [der && der.title, us.length > 1 && 'Units differ by row; each cell says which.']
+      .filter(Boolean).join(' ');
     return `<th class="${col.align === 'l' || col.kind !== 'num' ? 'l' : ''}" data-col="${col.key}" aria-sort="none">
-      <button class="sortable" data-sort="${col.key}"${der ? ` title="${esc(der.title)}"` : ''}>${esc(col.label)}${
+      <button class="sortable" data-sort="${col.key}"${tip ? ` title="${esc(tip)}"` : ''}>${esc(col.label)}${
         unit ? ` <span class="u">${esc(unit)}</span>` : ''}${
         der ? ` <span class="derived">${der.text}</span>` : ''}<span class="caret"></span></button>
     </th>`;
@@ -967,13 +1045,12 @@ function buildTable(box, spec) {
 
   const span = columns.length + (trailing || []).length;
   const refresh = () => {
-    state.catUnits = catalogueUnits();
     const list = applyFiltersAndSort(rows, columns, tState);
     const shown = cap ? list.slice(0, cap) : list;
     document.getElementById(`${prefix}-rows`).innerHTML = shown.map((r, i) => `<tr data-i="${i}"
       class="${rowClass ? rowClass(r) : ''}">
       ${columns.map((col) => `<td class="${col.align === 'l' || col.kind !== 'num' ? 'l' : 'num'}">${
-        col.html ? col.html(r) : esc(colText(col, r))}</td>`).join('')}
+        col.html ? col.html(r) : cellHtml(col, r, mixed(col))}</td>`).join('')}
       ${(trailing || []).map((t) => `<td class="l">${t.html(r)}</td>`).join('')}
     </tr>${expand && expand(r) ? `<tr class="notes-row" data-for="${esc(rowKey(r))}" hidden>
       <td class="l" colspan="${span}">${expand(r)}</td></tr>` : ''}`).join('');
@@ -1015,6 +1092,16 @@ function buildTable(box, spec) {
     const run = () => { tState.filters[el.dataset.filter] = el.value; refresh(); };
     el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', run);
   });
+  box.querySelectorAll(`[data-units="${prefix}"]`).forEach((el) => el.addEventListener('change', () => {
+    state.units = el.value;
+    saveStore();
+    redrawTables();
+  }));
+  box.querySelectorAll(`[data-both="${prefix}"]`).forEach((el) => el.addEventListener('change', () => {
+    state.showBoth = el.checked;
+    saveStore();
+    redrawTables();
+  }));
   const clear = document.getElementById(`${prefix}-clearfilters`);
   if (clear) clear.addEventListener('click', () => {
     tState.filters = {};
@@ -1064,6 +1151,10 @@ function springColumns(pick) {
         ? `<a href="${esc(p(r).url)}" target="_blank" rel="noopener">${esc(springName(p(r)))}</a>`
         : esc(springName(p(r)))) }),
     col({ key: 'family', label: 'family', kind: 'select', align: 'l', text: (r) => p(r).family || '' }),
+    col({ key: 'system', label: 'system', kind: 'select', align: 'l',
+      derivedKey: 'system', text: (r) => (sm.UNIT_SYSTEMS[p(r).system]?.name || p(r).system || '') }),
+    col({ key: 'shape', label: 'coil shape', kind: 'select', align: 'l',
+      derivedKey: 'shapeKey', text: (r) => sm.SHAPES[p(r).shapeKey]?.name || '' }),
     col({ key: 'cut', label: 'cut to length', kind: 'select', align: 'l',
       derivedKey: 'cutToLength', text: (r) => (p(r).cutToLength ? 'yes' : 'no') }),
     col({ key: 'material', label: 'material', kind: 'select', align: 'l',
@@ -1088,7 +1179,9 @@ function springColumns(pick) {
     col({ key: 'coils', label: 'total coils', kind: 'num', dp: 1, derivedKey: 'totalCoils', num: (r) => p(r).totalCoils }),
     col({ key: 'index', label: 'index C', kind: 'num', dp: 1, alwaysDerived: true, num: (r) => p(r).springIndex }),
     col({ key: 'temp', label: 'max temp', unit: 'temp', kind: 'num', num: (r) => p(r).maxTemp_C }),
+    col({ key: 'odtol', label: 'OD tol \u00b1', unit: 'length', kind: 'num', num: (r) => p(r).odTol_mm }),
     col({ key: 'milspec', label: 'mil spec', kind: 'text', align: 'l', text: (r) => p(r).milSpec || '' }),
+    col({ key: 'specs', label: 'specs met', kind: 'text', align: 'l', text: (r) => p(r).specsMet || '' }),
     col({ key: 'colour', label: 'colour', kind: 'select', align: 'l', text: (r) => p(r).colour || '' }),
     col({ key: 'pkg', label: 'pkg qty', kind: 'num', dp: 0, num: (r) => p(r).pkgQty }),
     col({ key: 'price', label: 'price/pkg', kind: 'num', dp: 2,
@@ -1114,9 +1207,9 @@ const FIND_COLUMNS = [
       const sev = severity(h.evaluation.working?.travelUsedFraction);
       return h.ok ? badge(sev, sev === 'ok' ? 'fits' : sev === 'warn' ? 'tight' : 'at limit') : badge('bad', 'no');
     } },
-  { key: 'compress', label: 'compress by', unit: 'length', kind: 'num', alwaysDerived: true,
+  { key: 'compress', spring: (h) => h.spring, label: 'compress by', unit: 'length', kind: 'num', alwaysDerived: true,
     num: (h) => h.evaluation.working?.deflection_mm },
-  { key: 'installed', label: 'installed lg', unit: 'length', kind: 'num', alwaysDerived: true,
+  { key: 'installed', spring: (h) => h.spring, label: 'installed lg', unit: 'length', kind: 'num', alwaysDerived: true,
     num: (h) => h.evaluation.working?.installedLength_mm },
   { key: 'used', label: 'travel used', kind: 'num', dp: 0, suffix: '%', alwaysDerived: true,
     num: (h) => (h.evaluation.working?.travelUsedFraction == null ? null : h.evaluation.working.travelUsedFraction * 100) },
@@ -1139,7 +1232,6 @@ function renderCatalogue() {
 
 function drawCatalogue() {
   const box = $('c-list');
-  state.catUnits = catalogueUnits();
   const shipped = state.catalogue.filter((x) => x._origin === 'shared').length;
   const mine = state.catalogue.filter((x) => x._origin === 'local').length;
   const warn = state.storeError ? `<div class="callout bad"><p>${esc(state.storeError)}</p></div>` : '';
@@ -1170,14 +1262,24 @@ function drawCatalogue() {
   });
 }
 
-/** The shared explainer above both tables. */
+/** The shared explainer and unit control above both tables. */
 function tableHelpHtml(prefix, total) {
-  return `<p class="hint">Shown in the units the vendor publishes
-    (${state.catUnits === 'in' ? 'inches, pounds, lbf/in, &deg;F' : 'mm, newtons, N/mm, &deg;C'}), whatever
-    the working units are set to elsewhere. A heading marked
-    <span class="derived">derived</span> is worked out by the calculator; everything else is as published.
-    <br>Click any heading to sort. The row under the headings filters: type text to match, or a comparison
-    on a number column &mdash; <code>&gt;2</code>, <code>&lt;=0.5</code>, <code>1..3</code>.
+  const opt = (v, label) => `<option value="${v}"${state.units === v ? ' selected' : ''}>${label}</option>`;
+  return `<p class="hint">
+    <label class="inline">Units
+      <select data-units="${prefix}">${opt('published', 'as published')}${
+        opt('in', 'all inch &mdash; in, lb, lbf/in')}${opt('mm', 'all metric &mdash; mm, N, N/mm')}</select></label>
+    <label class="inline"><input type="checkbox" data-both="${prefix}"${state.showBoth ? ' checked' : ''}>
+      show each number in both systems</label>
+    <br>As published means each part keeps the units its vendor printed &mdash; McMaster's inch springs in
+    inches and pounds, its metric springs in millimetres but still pounds for load and lbf/mm for rate.
+    Where a column mixes the two, every cell says which it is. Hover any number to read it the other way round.
+    A heading marked <span class="derived">derived</span> is worked out by the calculator; everything else is
+    as published.
+    <br>Click any heading to sort &mdash; sorting always compares the real quantity, never the printed number.
+    The row under the headings filters: type text to match, or a comparison on a number column &mdash;
+    <code>&gt;2</code>, <code>&lt;=0.5</code>, <code>1..3</code>. A number comparison is against the figure as
+    shown, so pick all inch or all metric before comparing across a mixed list.
     Showing <strong id="${prefix}-count">all ${total}</strong>.
     <button class="link" id="${prefix}-clearfilters">clear table filters</button>
     <span id="${prefix}-capnote"></span></p>`;

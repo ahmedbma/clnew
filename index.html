@@ -164,6 +164,10 @@ th[aria-sort="descending"] .caret{opacity:1;border-top:5px solid currentColor}
 tr.notes-row td{background:var(--bg)}
 tr.notes-row ul.notes{margin:2px 0;white-space:normal;max-width:96ch}
 .derived{color:var(--muted);font:400 11px/1.4 var(--sans)}
+/* the same number read in the other system, under the published one */
+.alt-unit{display:block;color:var(--muted);font-size:11px;line-height:1.3}
+label.inline{display:inline-flex;align-items:center;gap:5px;margin-right:14px;white-space:nowrap}
+label.inline select,label.inline input{margin:0}
 
 /* spec readout */
 dl.specs{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;margin:0;font-size:13px}
@@ -317,8 +321,20 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
           <select id="f-shape">
             <option value="">any</option>
             <option value="straight">straight cylindrical only</option>
+            <option value="conical">conical only</option>
+            <option value="barrel">barrel only</option>
+            <option value="hourglass">hourglass only</option>
           </select>
-          <div class="hint">Conical and barrel springs do not have a constant rate.</div></div>
+          <div class="hint">Only a straight spring has one rate all the way down. Conical, barrel and
+            hourglass springs stiffen as their coils close.</div></div>
+        <div><label for="f-system">Measurement system</label>
+          <select id="f-system">
+            <option value="">any</option>
+            <option value="inch">inch parts only</option>
+            <option value="metric">metric parts only</option>
+          </select>
+          <div class="hint">How the part is catalogued, not how you are working. Either can be shown
+            in either set of units.</div></div>
         <div><label for="f-mintemp">Rated to at least</label>
           <div class="combo"><input type="number" id="f-mintemp" placeholder="any temperature" step="any">
             <select id="f-temp-u"><option value="C">&deg;C</option><option value="F">&deg;F</option></select></div>
@@ -409,8 +425,8 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
         page. Copy the whole thing, boilerplate and all; the compliance and country-of-origin lines get
         dropped. A missing part number is fine &mdash; the spring gets named from its dimensions.</li>
     </ul>
-    <p class="hint">1,566 McMaster-Carr straight compression springs ship with the tool and load for
-      everyone. Anything you paste here is <strong>yours alone</strong>, saved in this browser, layered
+    <p class="hint">2,597 McMaster-Carr straight compression springs ship with the tool and load for
+      everyone &mdash; 1,566 inch and 1,031 metric. Anything you paste here is <strong>yours alone</strong>, saved in this browser, layered
       on top of them, and marked <em>yours</em> in the table below. To put springs in the shared list
       instead: <strong>Download as JSON</strong> and commit the file over
       <code>data/catalogue.json</code> in the repository.</p>

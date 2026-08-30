@@ -11,7 +11,7 @@
  * Pure functions, no DOM. Output is SI (mm, N) like the rest of the engine.
  */
 
-import { inToMm, resolveMaterial, resolveEnds, MATERIALS, END_TYPES } from './spring-math.js';
+import { inToMm, resolveMaterial, resolveEnds, resolveShape, MATERIALS, END_TYPES, SHAPES } from './spring-math.js';
 import { parseNumber, toMm, toNewtons, toNewtonsPerMm } from './catalog.js';
 
 /* ------------------------------------------------------------ normalising */
@@ -284,6 +284,27 @@ export function parseQuery(input, { defaultForceUnit = 'N' } = {}) {
     fields.cutToLength = 'exclude';
     read.push({ field: 'cutToLength', from: text.match(/\b(ready[\s-]*made|finished|off[\s-]*the[\s-]*shelf)\b/)[0],
       value: 'excluded' });
+  }
+
+  // --- measurement system and coil shape -------------------------------
+  // "metric" here means how the part is catalogued, not what units the answer
+  // comes back in -- those are set by the unit pickers and are independent.
+  // "metric" is never a unit, so it stands alone. "inch" nearly always is one
+  // -- "a half inch bore" is a dimension, not a request for inch parts -- so it
+  // only counts as a system when a word like parts or sizes follows it.
+  const INCH_AS_SYSTEM = /\bimperial\b|\binch(?:es)?\b(?=\s+(?:parts?|sizes?|springs?|series|stock|only|catalogue?|listing))/;
+  const sys = text.match(/\bmetric\b/) || text.match(INCH_AS_SYSTEM);
+  if (sys) {
+    fields.system = /metric/.test(sys[0]) ? 'metric' : 'inch';
+    read.push({ field: 'system', from: sys[0], value: fields.system === 'metric' ? 'metric parts' : 'inch parts' });
+  }
+  const shapeWord = text.match(/\bconical\b|\btapered\b|\bbarrel\b|\bhourglass\b|\bstraight\b|\bcylindrical\b/);
+  if (shapeWord) {
+    const key = resolveShape(shapeWord[0]);
+    if (key) {
+      fields.shapeKey = key;
+      read.push({ field: 'shape', from: shapeWord[0], value: SHAPES[key].name });
+    }
   }
 
   // --- what to optimise for -------------------------------------------

@@ -12,7 +12,7 @@
 
 import {
   inToMm, lbfToN, lbfPerInToNPerMm, resolveMaterial, resolveEnds,
-  normalizeSpring, MATERIALS, END_TYPES,
+  normalizeSpring, MATERIALS, END_TYPES, UNIT_FACTORS,
 } from './spring-math.js';
 
 /* ---------------------------------------------------------- value parsing */
@@ -49,6 +49,9 @@ export function detectUnit(text) {
   if (!text) return null;
   const t = String(text).toLowerCase();
   if (/n\s*\/\s*mm/.test(t)) return 'N/mm';
+  // McMaster's metric tables really do publish lbf per mm, so this is a unit
+  // in its own right and has to be tested before either half of it.
+  if (/(lbs?f?|pounds?)\s*\.?\s*\/\s*mm/.test(t)) return 'lbf/mm';
   if (/(lbs?f?|pounds?)\s*\.?\s*\/\s*(in|inch)/.test(t)) return 'lbf/in';
   if (/n\s*\/\s*m\b/.test(t)) return 'N/m';
   if (/\bkgf?\s*\/\s*mm/.test(t)) return 'kgf/mm';
@@ -64,14 +67,11 @@ export function detectUnit(text) {
   return null;
 }
 
-const LENGTH_TO_MM = { mm: 1, cm: 10, m: 1000, in: 25.4 };
-const FORCE_TO_N = {
-  N: 1, kN: 1000, lbf: 4.4482216152605, ozf: 0.2780138509,
-  kgf: 9.80665, gf: 0.00980665,
-};
-const RATE_TO_N_PER_MM = {
-  'N/mm': 1, 'N/m': 0.001, 'lbf/in': lbfPerInToNPerMm(1), 'kgf/mm': 9.80665,
-};
+// One table of factors, shared with the engine -- a second copy here would
+// eventually disagree with it.
+const LENGTH_TO_MM = UNIT_FACTORS.length;
+const FORCE_TO_N = UNIT_FACTORS.force;
+const RATE_TO_N_PER_MM = UNIT_FACTORS.rate;
 
 /** "850 deg F" / "450 C" -> degrees Celsius. */
 export function toCelsius(text) {
@@ -268,7 +268,9 @@ export function rowsToSprings(rows, opts = {}) {
       forRodDia_mm: toMm(row.forRodDia, lu),
       forHoleDia_mm: toMm(row.forHoleDia, lu),
       packQty: parseNumber(row.packQty),
-      sourceUnits: lu === 'mm' ? 'mm' : 'in',
+      // Each quantity keeps the unit it was actually published in -- a table
+      // can be metric for lengths and imperial for loads, and often is.
+      sourceUnits: { length: lu, force: fu, rate: ru },
       price: row.price || null,
       source: source || `pasted table row ${i + 1}`,
       provenance: 'vendor-table-import',
@@ -307,7 +309,11 @@ export function springFromForm(f) {
       : toNewtons(String(f.maxLoad), f.forceUnit || 'lbf'),
     totalCoils: f.totalCoils === '' || f.totalCoils == null ? null : parseNumber(String(f.totalCoils)),
     activeCoils: f.activeCoils === '' || f.activeCoils == null ? null : parseNumber(String(f.activeCoils)),
-    sourceUnits: (f.lengthUnit || 'in') === 'mm' ? 'mm' : 'in',
+    sourceUnits: {
+      length: f.lengthUnit || 'in',
+      force: f.forceUnit || 'lbf',
+      rate: f.rateUnit || 'lbf/in',
+    },
     provenance: 'hand-entered',
   };
   Object.keys(raw).forEach((k) => { if (raw[k] === undefined) delete raw[k]; });
