@@ -691,6 +691,17 @@ export function normalizeSpring(raw) {
     s.maxUsableForce_N = k * s.usableTravel_mm;
     if (L0 != null) s.minWorkingLength_mm = L0 - s.usableTravel_mm;
   }
+  // A published rate tolerance is used in preference to any assumption, so a
+  // bad one quietly widens the force band instead of being noticed. Commercial
+  // springs run to 10% and precision ones to 5%; a quarter of the rate is not
+  // a tolerance any vendor would print.
+  if (num(s.rateTol) != null && s.rateTol > 0.25) {
+    warnings.push(`Published rate tolerance of ${(s.rateTol * 100).toFixed(0)}% is far outside what any `
+      + 'spring is made to - 5% for precision, 10% for commercial. Taken as published, so the force band '
+      + 'shown for this one is far wider than the spring really is; a decimal point in the vendor table '
+      + 'is the usual cause.');
+  }
+
   if (s.travelToSolid_mm != null) s.forceAtSolid_N = k * s.travelToSolid_mm;
   if (num(s.maxTemp_C) != null) s.maxTemp_F = s.maxTemp_C * 9 / 5 + 32;
 
@@ -813,6 +824,8 @@ export function evaluate(springIn, opts = {}) {
   const forceErrFromRate = targetForce_N * rateTol;
   work.sensitivity = {
     dFdx_NperMm: k,
+    rateTol,
+    rateTolSource: opts.rateTol != null ? 'entered' : s.rateTol != null ? 'published' : 'assumed',
     positionBand_mm: dx,
     forceErrFromPosition_N: forceErrFromPosition,
     forceErrFromRate_N: forceErrFromRate,

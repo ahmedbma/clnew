@@ -364,7 +364,10 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
         <div><label for="f-postol">Position tolerance at assembly &plusmn; <span class="u" data-unit="length"></span></label>
           <input type="number" id="f-postol" placeholder="assumes 0.010 in" step="any"></div>
         <div><label for="f-ratetol">Spring rate tolerance &plusmn;%</label>
-          <input type="number" id="f-ratetol" placeholder="assumes 10%" step="any"></div>
+          <input type="number" id="f-ratetol" placeholder="vendor's own, else 10%" step="any">
+          <div class="hint">Left blank, each spring uses the tolerance its vendor publishes where there
+            is one &mdash; the precision families are held to &plusmn;5% &mdash; and 10% where there is not.
+            A number here overrides that for every spring.</div></div>
         <div><label for="f-set">Wire condition</label>
           <select id="f-set">
             <option value="">set not removed &mdash; conservative</option>
@@ -1247,6 +1250,17 @@ function normalizeSpring(raw) {
     s.maxUsableForce_N = k * s.usableTravel_mm;
     if (L0 != null) s.minWorkingLength_mm = L0 - s.usableTravel_mm;
   }
+  // A published rate tolerance is used in preference to any assumption, so a
+  // bad one quietly widens the force band instead of being noticed. Commercial
+  // springs run to 10% and precision ones to 5%; a quarter of the rate is not
+  // a tolerance any vendor would print.
+  if (num(s.rateTol) != null && s.rateTol > 0.25) {
+    warnings.push(`Published rate tolerance of ${(s.rateTol * 100).toFixed(0)}% is far outside what any `
+      + 'spring is made to - 5% for precision, 10% for commercial. Taken as published, so the force band '
+      + 'shown for this one is far wider than the spring really is; a decimal point in the vendor table '
+      + 'is the usual cause.');
+  }
+
   if (s.travelToSolid_mm != null) s.forceAtSolid_N = k * s.travelToSolid_mm;
   if (num(s.maxTemp_C) != null) s.maxTemp_F = s.maxTemp_C * 9 / 5 + 32;
 
@@ -1369,6 +1383,8 @@ function evaluate(springIn, opts = {}) {
   const forceErrFromRate = targetForce_N * rateTol;
   work.sensitivity = {
     dFdx_NperMm: k,
+    rateTol,
+    rateTolSource: opts.rateTol != null ? 'entered' : s.rateTol != null ? 'published' : 'assumed',
     positionBand_mm: dx,
     forceErrFromPosition_N: forceErrFromPosition,
     forceErrFromRate_N: forceErrFromRate,
@@ -2853,7 +2869,8 @@ function workingList(ev) {
     <dt>force you get</dt><dd>${F(sen.forceRange_N[0])} to ${F(sen.forceRange_N[1])}</dd>
     <dt></dt><dd class="muted">&plusmn;${pct(sen.worstCaseFraction)} worst case, &plusmn;${pct(sen.rssFraction)} RSS</dd>
     <dt>from position</dt><dd>${nf(sen.forceErrFromPosition_N, 3)} N per &plusmn;${L(sen.positionBand_mm)}</dd>
-    <dt>from rate tol</dt><dd>${nf(sen.forceErrFromRate_N, 3)} N</dd>
+    <dt>from rate tol</dt><dd>${nf(sen.forceErrFromRate_N, 3)} N at &plusmn;${nf(sen.rateTol * 100, 1)}%${
+      sen.rateTolSource === 'published' ? ' (the vendor\u2019s own figure)' : ' (assumed)'}</dd>
   </dl>`;
 }
 
@@ -3053,7 +3070,10 @@ function findRequirements() {
     ends: $('f-ends').value ? [$('f-ends').value] : null,
     families: $('f-family').value ? [$('f-family').value] : null,
     positionTol_mm: readLen('f-postol') ?? sm.inToMm(0.010),
-    rateTol: (rawNum('f-ratetol') ?? 10) / 100,
+    // Left blank, each spring uses its own published rate tolerance where the
+    // vendor gives one -- the precision families do -- and 10% where it does
+    // not. Typing a number here overrides that for every spring.
+    rateTol: rawNum('f-ratetol') == null ? undefined : rawNum('f-ratetol') / 100,
     setRemoved: $('f-set').value === '1',
     minDeflection_mm: readLen('f-mintravel'),
     maxTravelUsedFraction: (rawNum('f-maxtravel') ?? 100) / 100,
@@ -3085,7 +3105,7 @@ function renderShopping(req) {
 
   const rows = points.map((p) => {
     const best = p.options[0];
-    const band = (p.rate_Npmm * req.positionTol_mm + F0 * req.rateTol) / F0;
+    const band = (p.rate_Npmm * req.positionTol_mm + F0 * (req.rateTol ?? 0.10)) / F0;
     return `<tr>
       <td class="num l">${Lnum(p.deflection_mm)}</td>
       <td class="num">${nf(sm.nPerMmToLbfPerIn(p.rate_Npmm), 2)}</td>
@@ -3386,7 +3406,7 @@ function runAnalyse() {
   const ev = sm.evaluate(s, {
     targetForce_N,
     positionTol_mm: readLen('a-postol') ?? 0.25,
-    rateTol: (rawNum('a-ratetol') ?? 10) / 100,
+    rateTol: rawNum('a-ratetol') == null ? undefined : rawNum('a-ratetol') / 100,
     endCondition: $('a-endcond').value,
   });
   out.innerHTML = renderReport(s, ev);

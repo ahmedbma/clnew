@@ -262,7 +262,8 @@ function workingList(ev) {
     <dt>force you get</dt><dd>${F(sen.forceRange_N[0])} to ${F(sen.forceRange_N[1])}</dd>
     <dt></dt><dd class="muted">&plusmn;${pct(sen.worstCaseFraction)} worst case, &plusmn;${pct(sen.rssFraction)} RSS</dd>
     <dt>from position</dt><dd>${nf(sen.forceErrFromPosition_N, 3)} N per &plusmn;${L(sen.positionBand_mm)}</dd>
-    <dt>from rate tol</dt><dd>${nf(sen.forceErrFromRate_N, 3)} N</dd>
+    <dt>from rate tol</dt><dd>${nf(sen.forceErrFromRate_N, 3)} N at &plusmn;${nf(sen.rateTol * 100, 1)}%${
+      sen.rateTolSource === 'published' ? ' (the vendor\u2019s own figure)' : ' (assumed)'}</dd>
   </dl>`;
 }
 
@@ -462,7 +463,10 @@ function findRequirements() {
     ends: $('f-ends').value ? [$('f-ends').value] : null,
     families: $('f-family').value ? [$('f-family').value] : null,
     positionTol_mm: readLen('f-postol') ?? sm.inToMm(0.010),
-    rateTol: (rawNum('f-ratetol') ?? 10) / 100,
+    // Left blank, each spring uses its own published rate tolerance where the
+    // vendor gives one -- the precision families do -- and 10% where it does
+    // not. Typing a number here overrides that for every spring.
+    rateTol: rawNum('f-ratetol') == null ? undefined : rawNum('f-ratetol') / 100,
     setRemoved: $('f-set').value === '1',
     minDeflection_mm: readLen('f-mintravel'),
     maxTravelUsedFraction: (rawNum('f-maxtravel') ?? 100) / 100,
@@ -494,7 +498,7 @@ function renderShopping(req) {
 
   const rows = points.map((p) => {
     const best = p.options[0];
-    const band = (p.rate_Npmm * req.positionTol_mm + F0 * req.rateTol) / F0;
+    const band = (p.rate_Npmm * req.positionTol_mm + F0 * (req.rateTol ?? 0.10)) / F0;
     return `<tr>
       <td class="num l">${Lnum(p.deflection_mm)}</td>
       <td class="num">${nf(sm.nPerMmToLbfPerIn(p.rate_Npmm), 2)}</td>
@@ -795,7 +799,7 @@ function runAnalyse() {
   const ev = sm.evaluate(s, {
     targetForce_N,
     positionTol_mm: readLen('a-postol') ?? 0.25,
-    rateTol: (rawNum('a-ratetol') ?? 10) / 100,
+    rateTol: rawNum('a-ratetol') == null ? undefined : rawNum('a-ratetol') / 100,
     endCondition: $('a-endcond').value,
   });
   out.innerHTML = renderReport(s, ev);

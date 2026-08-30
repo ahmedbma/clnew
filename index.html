@@ -364,7 +364,10 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
         <div><label for="f-postol">Position tolerance at assembly &plusmn; <span class="u" data-unit="length"></span></label>
           <input type="number" id="f-postol" placeholder="assumes 0.010 in" step="any"></div>
         <div><label for="f-ratetol">Spring rate tolerance &plusmn;%</label>
-          <input type="number" id="f-ratetol" placeholder="assumes 10%" step="any"></div>
+          <input type="number" id="f-ratetol" placeholder="vendor's own, else 10%" step="any">
+          <div class="hint">Left blank, each spring uses the tolerance its vendor publishes where there
+            is one &mdash; the precision families are held to &plusmn;5% &mdash; and 10% where there is not.
+            A number here overrides that for every spring.</div></div>
         <div><label for="f-set">Wire condition</label>
           <select id="f-set">
             <option value="">set not removed &mdash; conservative</option>

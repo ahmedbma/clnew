@@ -736,3 +736,38 @@ test('a rate is recovered from a published load at a published length', () => {
   close(given.rate_Npmm, 2);
   assert.ok(!given.derived.includes('rate_Npmm'));
 });
+
+test('a spring is held to its own published rate tolerance, not a blanket 10%', () => {
+  const precision = {
+    partNumber: 'P', material: 'Music Wire', od_mm: 10, wireDia_mm: 1,
+    freeLength_mm: 40, rate_Npmm: 2, rateTol: 0.05,
+  };
+  const plain = { ...precision, partNumber: 'C', rateTol: undefined };
+
+  // Nothing passed: the vendor's figure wins where there is one, and 10%
+  // stands in where there is not. Getting this backwards overstates the
+  // force band on exactly the springs bought for their tight tolerance.
+  const a = sm.evaluate(precision, { targetForce_N: 10 }).working.sensitivity;
+  assert.equal(a.rateTol, 0.05);
+  assert.equal(a.rateTolSource, 'published');
+  close(a.forceErrFromRate_N, 0.5);
+
+  const b = sm.evaluate(plain, { targetForce_N: 10 }).working.sensitivity;
+  assert.equal(b.rateTol, 0.10);
+  assert.equal(b.rateTolSource, 'assumed');
+  close(b.forceErrFromRate_N, 1.0);
+
+  // An explicit figure still overrides both.
+  const c = sm.evaluate(precision, { targetForce_N: 10, rateTol: 0.02 }).working.sensitivity;
+  assert.equal(c.rateTol, 0.02);
+  assert.equal(c.rateTolSource, 'entered');
+
+  // And it survives the search path, which is where the UI actually goes.
+  const [hit] = sm.searchCatalog([precision], { targetForce_N: 10 });
+  assert.equal(hit.evaluation.working.sensitivity.rateTol, 0.05);
+
+  // A tolerance no spring is made to is called out rather than believed.
+  const silly = sm.normalizeSpring({ ...precision, rateTol: 0.5 });
+  assert.match(silly.warnings.join(' | '), /far outside what any spring is made to/);
+  assert.ok(!sm.normalizeSpring(precision).warnings.some((w) => /far outside/.test(w)));
+});
