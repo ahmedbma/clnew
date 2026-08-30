@@ -249,27 +249,39 @@ function specList(s) {
 function workingList(ev) {
   const w = ev.working;
   if (!w) return '';
+  const hi = ev.workingHigh;
   const sen = w.sensitivity;
+  const to = ' <span class="muted">to</span> ';
+  // With a band every line has two answers, so each is shown low-end first --
+  // except stress and headroom, which only matter at the end that is worst.
+  const worst = ev.worst;
   return `<dl class="specs">
-    <dt>force</dt><dd>${F(w.targetForce_N, { both: true })}</dd>
-    <dt>compress by</dt><dd>${L(w.deflection_mm, { both: true })}</dd>
-    <dt>installed length</dt><dd>${L(w.installedLength_mm, { both: true })}</dd>
-    <dt>travel used</dt><dd>${pct(w.travelUsedFraction)} of usable, ${L(w.travelHeadroom_mm)} spare</dd>
-    <dt>shear stress</dt><dd>${nf(w.tauStatic_MPa, 0)} MPa = ${pct(w.utilisation)} of allowable</dd>
-    <dt>force you get</dt><dd>${F(sen.forceRange_N[0])} to ${F(sen.forceRange_N[1])}</dd>
+    <dt>force</dt><dd>${F(w.targetForce_N, { both: true })}${hi ? to + F(hi.targetForce_N, { both: true }) : ''}</dd>
+    <dt>compress by</dt><dd>${L(w.deflection_mm, { both: true })}${hi ? to + L(hi.deflection_mm, { both: true }) : ''}</dd>
+    ${hi ? `<dt>band stroke</dt><dd>${L(ev.range.stroke_mm, { both: true })} of travel to sweep the band</dd>` : ''}
+    <dt>installed length</dt><dd>${L(w.installedLength_mm, { both: true })}${hi ? to + L(hi.installedLength_mm, { both: true }) : ''}</dd>
+    <dt>travel used</dt><dd>${hi ? `${pct(w.travelUsedFraction)}${to}${pct(hi.travelUsedFraction)}` : pct(w.travelUsedFraction)} of usable, ${L(worst.travelHeadroom_mm)} spare at the top</dd>
+    <dt>shear stress</dt><dd>${nf((hi || w).tauStatic_MPa, 0)} MPa = ${pct(worst.utilisation)} of allowable${hi ? ' at the top of the band' : ''}</dd>
+    <dt>force you get</dt><dd>${F(sen.forceRange_N[0])} to ${F(sen.forceRange_N[1])} ${hi ? '<span class="muted">asking for ' + F(w.targetForce_N) + '</span>' : ''}</dd>
     <dt></dt><dd class="muted">&plusmn;${pct(sen.worstCaseFraction)} worst case, &plusmn;${pct(sen.rssFraction)} RSS</dd>
+    ${hi ? `<dt>and at the top</dt><dd>${F(hi.sensitivity.forceRange_N[0])} to ${F(hi.sensitivity.forceRange_N[1])} <span class="muted">asking for ${F(hi.targetForce_N)}</span></dd>
+    <dt></dt><dd class="muted">&plusmn;${pct(hi.sensitivity.worstCaseFraction)} worst case &mdash; the same newtons of position error, a smaller share of a bigger load</dd>` : ''}
     <dt>from position</dt><dd>${nf(sen.forceErrFromPosition_N, 3)} N per &plusmn;${L(sen.positionBand_mm)}</dd>
     <dt>from rate tol</dt><dd>${nf(sen.forceErrFromRate_N, 3)} N at &plusmn;${nf(sen.rateTol * 100, 1)}%${
-      sen.rateTolSource === 'published' ? ' (the vendor\u2019s own figure)' : ' (assumed)'}</dd>
+      sen.rateTolSource === 'published' ? ' (the vendor\u2019s own figure)' : ' (assumed)'}${
+      hi ? `, rising to ${nf(hi.sensitivity.forceErrFromRate_N, 3)} N at the top` : ''}</dd>
   </dl>`;
 }
 
 function renderReport(s, ev) {
   const w = ev.working;
+  // The verdict is about the hardest point asked for, which is the top of a
+  // band and the working point itself when there is only one.
+  const used = ev.worst?.travelUsedFraction ?? 0;
   const verdict = !w ? '' : !ev.feasible
-    ? badge('bad', 'will not reach this force')
-    : (w.travelUsedFraction ?? 0) > 0.95 ? badge('warn', 'works, no travel margin')
-      : (w.travelUsedFraction ?? 0) > 0.75 ? badge('warn', 'works, tight on travel')
+    ? badge('bad', ev.range ? 'will not cover this band' : 'will not reach this force')
+    : used > 0.95 ? badge('warn', 'works, no travel margin')
+      : used > 0.75 ? badge('warn', 'works, tight on travel')
         : badge('ok', 'works');
   const notes = [...ev.warnings, ...(ev.feasible ? [] : ev.reasons)];
   const buck = ev.buckling
@@ -304,10 +316,15 @@ function travelMeter(s, ev) {
   const px = (mm) => x0 + (mm / total) * (x1 - x0);
   const barY = 34, barH = 18, r = 4;
 
-  const instX = px(w.installedLength_mm);
+  // With a band the marker becomes a span: the spring lives between the two
+  // installed lengths, so both ends are drawn and the stroke between them shaded.
+  const hi = ev.workingHigh;
+  const deep = hi || w;
+  const instX = px(deep.installedLength_mm);
+  const loX = hi ? px(w.installedLength_mm) : null;
   const solidX = px(s.solidLength_mm);
   const usableX = s.minWorkingLength_mm != null ? px(s.minWorkingLength_mm) : null;
-  const sev = severity(w.travelUsedFraction);
+  const sev = severity(ev.worst.travelUsedFraction);
   const fillColor = `var(--${sev === 'ok' ? 'accent' : sev})`;
 
   // Track is the free spring; the fill is the part you compress away.
@@ -317,16 +334,25 @@ function travelMeter(s, ev) {
     <rect x="${instX + 2}" y="${barY}" width="${Math.max(x1 - instX - 2, 0)}" height="${barH}" rx="${r}" fill="${fillColor}" opacity="0.85"/>
     <rect x="${x0}" y="${barY}" width="${Math.max(solidX - x0, 0)}" height="${barH}" rx="${r}" fill="var(--line)"/>
     ${usableX != null ? `<line x1="${usableX}" y1="${barY - 5}" x2="${usableX}" y2="${barY + barH + 5}" stroke="var(--warn)" stroke-width="1"/>` : ''}
+    ${loX != null ? `<rect x="${instX}" y="${barY - 4}" width="${Math.max(loX - instX, 1)}" height="${barH + 8}" rx="3"
+        fill="var(--ink)" opacity="0.16"/>
+      <line x1="${loX}" y1="${barY - 9}" x2="${loX}" y2="${barY + barH + 9}" stroke="var(--ink)" stroke-width="2"/>
+      <circle cx="${loX}" cy="${barY + barH / 2}" r="5" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/>` : ''}
     <line x1="${instX}" y1="${barY - 9}" x2="${instX}" y2="${barY + barH + 9}" stroke="var(--ink)" stroke-width="2"/>
     <circle cx="${instX}" cy="${barY + barH / 2}" r="5" fill="var(--ink)" stroke="var(--panel)" stroke-width="2"/>
     <text x="${x0}" y="${barY - 12}" font-size="11" fill="var(--muted)">solid ${esc(Lnum(s.solidLength_mm))}</text>
     <text x="${x1}" y="${barY - 12}" font-size="11" fill="var(--muted)" text-anchor="end">free ${esc(Lnum(s.freeLength_mm))}</text>
     <text x="${instX}" y="${barY + barH + 24}" font-size="12" fill="var(--ink)" text-anchor="${instX > W * 0.8 ? 'end' : instX < W * 0.2 ? 'start' : 'middle'}">
-      installed ${esc(Lnum(w.installedLength_mm))} ${esc(Lunit())}
+      ${hi ? '' : 'installed '}${esc(Lnum(deep.installedLength_mm))}${hi ? '' : ` ${esc(Lunit())}`}
     </text>
+    ${loX != null ? `<text x="${loX}" y="${barY + barH + 24}" font-size="12" fill="var(--ink)"
+        text-anchor="${loX > W * 0.8 ? 'end' : loX < W * 0.2 ? 'start' : 'middle'}">${esc(Lnum(w.installedLength_mm))} ${esc(Lunit())}</text>` : ''}
   </svg>
-  <figcaption>Grey is the coils stacked solid; shaded is the ${esc(L(w.deflection_mm))} you compress to reach
-    ${esc(F(w.targetForce_N))}${usableX != null ? `; the amber rule is the end of usable travel` : ''}.</figcaption>
+  <figcaption>${hi
+    ? `Grey is the coils stacked solid; the darker span is the ${esc(L(ev.range.stroke_mm))} of stroke that
+       carries it from ${esc(F(w.targetForce_N))} to ${esc(F(hi.targetForce_N))}`
+    : `Grey is the coils stacked solid; shaded is the ${esc(L(w.deflection_mm))} you compress to reach
+       ${esc(F(w.targetForce_N))}`}${usableX != null ? `; the amber rule is the end of usable travel` : ''}.</figcaption>
 </figure>`;
 }
 
@@ -341,7 +367,8 @@ function forceChart(s, ev) {
 
   const xMin = s.solidLength_mm ?? s.freeLength_mm - (s.usableTravel_mm ?? 0);
   const xMax = s.freeLength_mm;
-  const yMax = Math.max(s.rate_Npmm * (xMax - xMin), w.targetForce_N) * 1.08;
+  const hi = ev.workingHigh;
+  const yMax = Math.max(s.rate_Npmm * (xMax - xMin), (hi || w).targetForce_N) * 1.08;
   const X = (mm) => m.l + ((mm - xMin) / (xMax - xMin)) * plotW;
   const Y = (n) => m.t + plotH - (n / yMax) * plotH;
 
@@ -374,13 +401,28 @@ function forceChart(s, ev) {
     ${usableX != null ? `<line x1="${usableX}" y1="${m.t}" x2="${usableX}" y2="${m.t + plotH}" stroke="var(--warn)" stroke-width="1"/>
       <text x="${usableX + (usableX < m.l + 130 ? 5 : -5)}" y="${m.t + 12}" font-size="11" fill="var(--muted)"
         text-anchor="${usableX < m.l + 130 ? 'start' : 'end'}">usable travel ends</text>` : ''}
+    ${hi ? `<rect x="${X(hi.installedLength_mm)}" y="${Y(hi.targetForce_N)}"
+          width="${Math.max(X(w.installedLength_mm) - X(hi.installedLength_mm), 1)}"
+          height="${Math.max(Y(w.targetForce_N) - Y(hi.targetForce_N), 1)}"
+          fill="var(--accent)" opacity="0.12"/>
+      <line x1="${m.l}" y1="${Y(hi.targetForce_N)}" x2="${X(hi.installedLength_mm)}" y2="${Y(hi.targetForce_N)}"
+            stroke="var(--accent)" stroke-width="1" stroke-dasharray="3 3"/>
+      <line x1="${m.l}" y1="${Y(w.targetForce_N)}" x2="${X(w.installedLength_mm)}" y2="${Y(w.targetForce_N)}"
+            stroke="var(--accent)" stroke-width="1" stroke-dasharray="3 3"/>` : ''}
     <rect x="${X(w.installedLength_mm) - 22}" y="${bandLo}" width="44" height="${Math.max(bandHi - bandLo, 1)}"
           fill="var(--accent)" opacity="0.10"/>
     <line x1="${X(xMax)}" y1="${Y(0)}" x2="${X(xMin)}" y2="${Y(s.rate_Npmm * (xMax - xMin))}"
           stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>
+    ${hi ? `<line x1="${X(w.installedLength_mm)}" y1="${Y(w.targetForce_N)}"
+            x2="${X(hi.installedLength_mm)}" y2="${Y(hi.targetForce_N)}"
+            stroke="var(--accent)" stroke-width="5" stroke-linecap="round" opacity="0.75"/>
+      <circle cx="${X(hi.installedLength_mm)}" cy="${Y(hi.targetForce_N)}" r="5"
+            fill="var(--accent)" stroke="var(--panel)" stroke-width="2"/>
+      <text x="${X(hi.installedLength_mm)}" y="${Y(hi.targetForce_N) - 12}" font-size="12" fill="var(--ink)"
+            text-anchor="${X(hi.installedLength_mm) > W * 0.75 ? 'end' : 'middle'}">${F(hi.targetForce_N)}</text>` : ''}
     <circle cx="${X(w.installedLength_mm)}" cy="${Y(w.targetForce_N)}" r="5"
             fill="var(--accent)" stroke="var(--panel)" stroke-width="2"/>
-    <text x="${X(w.installedLength_mm)}" y="${Y(w.targetForce_N) - 12}" font-size="12" fill="var(--ink)"
+    <text x="${X(w.installedLength_mm)}" y="${Y(w.targetForce_N) + (hi ? 20 : -12)}" font-size="12" fill="var(--ink)"
           text-anchor="${X(w.installedLength_mm) > W * 0.75 ? 'end' : 'middle'}">${F(w.targetForce_N)}</text>
     <g class="cross" opacity="0">
       <line y1="${m.t}" y2="${m.t + plotH}" stroke="var(--muted)" stroke-width="1"/>
@@ -392,8 +434,10 @@ function forceChart(s, ev) {
   const fig = document.createElement('figure');
   fig.className = 'figwrap';
   fig.innerHTML = `${svg}<div class="tip" hidden></div>
-    <figcaption>Drag across the plot to read the load at any length. Shaded band is the
-      &plusmn;${pct(sen.worstCaseFraction)} you actually get once rate tolerance and
+    <figcaption>Drag across the plot to read the load at any length.${hi
+      ? ` The heavy segment is the band you asked for: ${esc(L(ev.range.stroke_mm))} of stroke from
+         ${esc(F(w.targetForce_N))} to ${esc(F(hi.targetForce_N))}.` : ''} Shaded box is the
+      &plusmn;${pct(sen.worstCaseFraction)} you actually get at ${esc(F(w.targetForce_N))} once rate tolerance and
       &plusmn;${L(sen.positionBand_mm)} of assembly position are counted.</figcaption>`;
 
   // Crosshair readout -- the chart is a straight line, so the useful
@@ -436,8 +480,15 @@ function mountViz(container, s, ev) {
 /* ------------------------------------------------------------- FIND tab */
 
 function findRequirements() {
+  // Two boxes, either order: "15 down to 1.5" is the same band as "1.5 to 15",
+  // so the pair is sorted rather than rejected.
+  const a = readForce('f-force', 'f-force-u');
+  const b = readForce('f-force2', 'f-force-u');
+  const low = b != null && a != null ? Math.min(a, b) : a ?? b;
+  const high = b != null && a != null && b !== a ? Math.max(a, b) : null;
   return {
-    targetForce_N: readForce('f-force', 'f-force-u'),
+    targetForce_N: low,
+    targetForceHigh_N: high,
     minOD_mm: readLen('f-minod'),
     maxOD_mm: readLen('f-maxod'),
     minID_mm: readLen('f-minid'),
@@ -466,6 +517,7 @@ function findRequirements() {
     rateTol: rawNum('f-ratetol') == null ? undefined : rawNum('f-ratetol') / 100,
     setRemoved: $('f-set').value === '1',
     minDeflection_mm: readLen('f-mintravel'),
+    minStroke_mm: readLen('f-minstroke'),
     maxTravelUsedFraction: (rawNum('f-maxtravel') ?? 100) / 100,
     materials: $('f-material').value ? [$('f-material').value] : null,
     sortBy: $('f-sort').value,
@@ -478,26 +530,39 @@ function renderShopping(req) {
   const F0 = req.targetForce_N;
   if (!F0) { box.innerHTML = ''; return; }
 
-  // The rate window is pure F/x -- it needs no envelope at all. Geometry does,
-  // so those columns only appear once a diameter is given.
+  // A band changes what sets the rate: it is the force you have to *build* over
+  // the stroke, not the force itself. For a single load the two are the same
+  // number, which is why one expression covers both.
+  const Fhi = req.targetForceHigh_N;
+  const isRange = Fhi != null;
+  const dF = isRange ? Fhi - F0 : F0;   // the force the stroke has to develop
+  const Fpeak = isRange ? Fhi : F0;     // what the wire actually has to survive
+
+  // The rate window is pure force over travel -- it needs no envelope at all.
+  // Geometry does, so those columns only appear once a diameter is given.
   const xMin = sm.inToMm(0.05);
   const xMax = Math.min(sm.inToMm(0.5), req.maxFreeLength_mm ?? sm.inToMm(0.5));
+  const [kSoft, kStiff] = [dF / xMax, dF / xMin];
   const hasOD = req.maxOD_mm != null;
+  // Geometry is sized at the top of the band, so the deflection asked for is
+  // the one that reaches Fpeak at each rate -- not the stroke itself.
   const ds = hasOD
-    ? sm.designSpace({ targetForce_N: F0, maxOD_mm: req.maxOD_mm, deflectionRange_mm: [xMin, xMax], steps: 6 })
+    ? sm.designSpace({ targetForce_N: Fpeak, maxOD_mm: req.maxOD_mm,
+      deflectionRange_mm: [Fpeak / kStiff, Fpeak / kSoft], steps: 6 })
     : null;
 
   const points = ds ? ds.points : Array.from({ length: 6 }, (_, i) => {
     const x = xMin * Math.pow(xMax / xMin, i / 5);
-    return { deflection_mm: x, rate_Npmm: F0 / x, options: [] };
+    return { deflection_mm: x, rate_Npmm: dF / x, options: [] };
   });
-  const [kSoft, kStiff] = [F0 / xMax, F0 / xMin];
 
   const rows = points.map((p) => {
     const best = p.options[0];
+    // Rate tolerance and position error are worst as a share of the load at the
+    // bottom of the band, so that is where the quoted band is read.
     const band = (p.rate_Npmm * req.positionTol_mm + F0 * (req.rateTol ?? 0.10)) / F0;
     return `<tr>
-      <td class="num l">${Lnum(p.deflection_mm)}</td>
+      <td class="num l">${Lnum(dF / p.rate_Npmm)}</td>
       <td class="num">${nf(sm.nPerMmToLbfPerIn(p.rate_Npmm), 2)}</td>
       <td class="num">${nf(p.rate_Npmm, 3)}</td>
       <td class="num">&plusmn;${pct(band)}</td>
@@ -509,21 +574,27 @@ function renderShopping(req) {
 
   box.innerHTML = `<h2>What to shop for</h2>
     <div class="callout">
-      <p>For <strong>${F(F0)}</strong> (${nf(sm.nToLbf(F0), 3)} lbf, ${nf(F0 / 0.00980665, 0)} gf,
-         ${nf(F0 / 0.2780138509, 1)} oz)${hasOD ? ` inside <strong>${L(req.maxOD_mm)}</strong> OD` : ''},
+      <p>For ${isRange
+        ? `<strong>${F(F0)} to ${F(Fhi)}</strong> (a rise of ${F(dF)} across the stroke)`
+        : `<strong>${F(F0)}</strong> (${nf(sm.nToLbf(F0), 3)} lbf, ${nf(F0 / 0.00980665, 0)} gf,
+         ${nf(F0 / 0.2780138509, 1)} oz)`}${hasOD ? ` inside <strong>${L(req.maxOD_mm)}</strong> OD` : ''},
          filter the vendor's compression-spring table to this rate window:</p>
       <p class="big">${nf(sm.nPerMmToLbfPerIn(kSoft), 2)} &ndash; ${nf(sm.nPerMmToLbfPerIn(kStiff), 2)} lbf/in
         &nbsp;<span class="muted" style="font-size:13px">(${nf(kSoft, 3)} &ndash; ${nf(kStiff, 3)} N/mm)</span></p>
-      <p class="muted" style="font-size:13px">Softer end puts the working load ${L(xMax)} down the travel,
+      <p class="muted" style="font-size:13px">${isRange
+        ? `Softer end spreads the band over ${L(xMax)} of stroke, stiffer end over ${L(xMin)}. A stiff
+           spring gets you from ${esc(F(F0))} to ${esc(F(Fhi))} in almost no movement at all, which is
+           usually the opposite of what a band is for.`
+        : `Softer end puts the working load ${L(xMax)} down the travel,
         stiffer end ${L(xMin)}. Anything stiffer than that window and you are trying to hold a force
-        with a few thou of travel.</p>
+        with a few thou of travel.`}</p>
     </div>
     <div class="scroll"><table>
-      <thead><tr><th class="l">compress by</th><th>rate lbf/in</th><th>rate N/mm</th><th>force band</th>
+      <thead><tr><th class="l">${isRange ? 'band stroke' : 'compress by'}</th><th>rate lbf/in</th><th>rate N/mm</th><th>force band</th>
         ${hasOD ? `<th>wire in</th><th>coils</th><th>min free ${Lunit()}</th>` : ''}</tr></thead>
       <tbody>${rows}</tbody></table></div>
     <p class="hint">${hasOD
-      ? 'Right-hand columns are the leanest geometry that delivers each rate inside your OD — what a spring at that rate has to look like. Use it to sanity-check anything a vendor offers you.'
+      ? `Right-hand columns are the leanest geometry that delivers each rate inside your OD — what a spring at that rate has to look like${isRange ? `, sized to survive the top of the band at ${esc(F(Fhi))}` : ''}. Use it to sanity-check anything a vendor offers you.`
       : 'Give a maximum outside diameter under “narrow it down” and this also shows what a spring at each rate has to look like — wire size, coil count, shortest possible free length.'}</p>`;
 }
 
@@ -542,9 +613,10 @@ function renderResults(req) {
   const hits = sm.searchCatalog(state.catalogue, req);
   state.results = hits;
   const okCount = hits.filter((h) => h.ok).length;
+  const isRange = req.targetForceHigh_N != null;
 
   const shown = buildTable(box, {
-    columns: FIND_COLUMNS,
+    columns: findColumns(req.targetForceHigh_N != null),
     rows: hits,
     tState: state.find,
     prefix: 'f',
@@ -552,9 +624,14 @@ function renderResults(req) {
     rowClass: (h) => (h.ok ? '' : 'rejected'),
     expand: (h) => notesExpand(h.spring),
     onRowClick: (h) => showDetail(h),
-    header: `<h2>${okCount} of ${state.catalogue.length} springs can deliver ${F(req.targetForce_N)}</h2>
-      <p class="hint" style="margin-top:-6px">Ranked by &ldquo;${esc($('f-sort').selectedOptions[0].textContent)}&rdquo;.
-        Click a row for the full working-point report below. &ldquo;Force band&rdquo; is what you actually get
+    header: `<h2>${okCount} of ${state.catalogue.length} springs can deliver ${
+      isRange ? `${F(req.targetForce_N)} to ${F(req.targetForceHigh_N)}` : F(req.targetForce_N)}</h2>
+      <p class="hint" style="margin-top:-6px">${isRange
+        ? `Every one of these covers the whole band: it reaches ${esc(F(req.targetForce_N))} and carries on to
+           ${esc(F(req.targetForceHigh_N))} without running past its usable travel or its allowable stress.
+           &ldquo;Band stroke&rdquo; is how far it has to move to sweep the two. `
+        : ''}Ranked by &ldquo;${esc($('f-sort').selectedOptions[0].textContent)}&rdquo;.
+        Click a row for the full working-point report below. &ldquo;Force band &plusmn;&rdquo; is what you actually get
         once rate tolerance and assembly position error are counted &mdash; the reason a softer spring
         compressed further beats a stiff one nudged slightly.</p>
       ${tableHelpHtml('f', hits.length)}`,
@@ -588,10 +665,15 @@ function showDetail(h) {
 
 /** Live restatement of the force in the units people actually quote springs in. */
 function renderEquivalents() {
-  const N = readForce('f-force', 'f-force-u');
-  $('f-equiv').textContent = N
-    ? `= ${nf(N, 3)} N  ·  ${nf(sm.nToLbf(N), 4)} lbf  ·  ${nf(N / 0.00980665, 1)} gf  ·  ${nf(N / 0.2780138509, 2)} oz`
-    : '';
+  const say = (N) => `${nf(N, 3)} N  ·  ${nf(sm.nToLbf(N), 4)} lbf  ·  ${nf(N / 0.00980665, 1)} gf  ·  ${nf(N / 0.2780138509, 2)} oz`;
+  const a = readForce('f-force', 'f-force-u');
+  const b = readForce('f-force2', 'f-force-u');
+  const el = $('f-equiv');
+  if (a == null && b == null) { el.textContent = ''; return; }
+  if (a == null || b == null || a === b) { el.textContent = `= ${say(a ?? b)}`; return; }
+  el.textContent = `${nf(Math.min(a, b), 3)} N to ${nf(Math.max(a, b), 3)} N  =  `
+    + `${nf(sm.nToLbf(Math.min(a, b)), 4)} to ${nf(sm.nToLbf(Math.max(a, b)), 4)} lbf`
+    + `  ·  a ${nf(Math.max(a, b) / Math.min(a, b), 2)}:1 band`;
 }
 
 function runFind() {
@@ -616,7 +698,7 @@ function runFind() {
 /** Optional controls, so one place knows how to clear them all. */
 const OPTIONAL_NUMBERS = ['f-minod', 'f-maxod', 'f-minid', 'f-maxid', 'f-minwire', 'f-maxwire',
   'f-minfree', 'f-maxfree', 'f-maxinst', 'f-maxsolid', 'f-minrate', 'f-maxrate', 'f-minload',
-  'f-mintravel', 'f-maxtravel', 'f-mintemp', 'f-postol', 'f-ratetol'];
+  'f-mintravel', 'f-minstroke', 'f-maxtravel', 'f-mintemp', 'f-postol', 'f-ratetol'];
 const OPTIONAL_SELECTS = { 'f-material': '', 'f-ends': '', 'f-shape': '', 'f-family': '',
   'f-system': '', 'f-section': '', 'f-duty': '', 'f-cut': '', 'f-set': '', 'f-sort': 'robustness' };
 
@@ -626,7 +708,7 @@ const OPTIONAL_SELECTS = { 'f-material': '', 'f-ends': '', 'f-shape': '', 'f-fam
  * boxes it silently changes every constraint, so values are converted.
  */
 const LENGTH_INPUTS = ['f-minod', 'f-maxod', 'f-minid', 'f-maxid', 'f-minwire', 'f-maxwire',
-  'f-minfree', 'f-maxfree', 'f-maxinst', 'f-maxsolid', 'f-mintravel', 'f-postol',
+  'f-minfree', 'f-maxfree', 'f-maxinst', 'f-maxsolid', 'f-mintravel', 'f-minstroke', 'f-postol',
   'a-od', 'a-id', 'a-wire', 'a-free', 'a-maxdefl', 'a-at', 'a-postol'];
 const RATE_INPUTS = ['f-minrate', 'f-maxrate', 'a-rate'];
 const ANALYSE_FORCE_INPUTS = ['a-maxload'];
@@ -675,7 +757,7 @@ const NL_LABELS = {
   minRate: 'min rate', maxRate: 'max rate',
   material: 'material', ends: 'end type', sortBy: 'rank by',
   cutToLength: 'cut-to-length', system: 'catalogued in', shape: 'coil shape',
-  duty: 'spring class', section: 'wire section',
+  duty: 'spring class', section: 'wire section', 'force band': 'force band',
 };
 
 function applyParse(res) {
@@ -691,6 +773,11 @@ function applyParse(res) {
   if (f.force_N != null) {
     $('f-force-u').value = f.forceUnit || 'N';
     $('f-force').value = String(+(f.forceValue ?? sm.nToLbf(f.force_N)).toFixed(6));
+    // A phrase without a band clears the second box, so an old top end does not
+    // survive into a search that never mentioned one.
+    $('f-force2').value = f.forceHigh_N != null
+      ? String(+(f.forceHighValue ?? sm.nToLbf(f.forceHigh_N)).toFixed(6))
+      : '';
   }
   for (const [key, id] of Object.entries(NL_FIELDS)) {
     if (f[key] != null) $(id).value = String(+disp(f[key]).toFixed(4));
@@ -753,6 +840,7 @@ document.querySelectorAll('#tab-find select').forEach((x) => {
   if (!UNIT_PICKERS.has(x.id)) x.addEventListener('change', () => { if (state.results.length) runFind(); });
 });
 $('f-force').addEventListener('input', renderEquivalents);
+$('f-force2').addEventListener('input', renderEquivalents);
 $('f-force-u').addEventListener('change', () => { renderEquivalents(); refreshUnitLabels(); });
 
 /* ---------------------------------------------------------- ANALYSE tab */
@@ -999,8 +1087,8 @@ function applyFiltersAndSort(rows, columns, tState) {
     .filter(([, f]) => f);
   let list = active.length ? rows.filter((r) => active.every(([, f]) => f(r))) : rows.slice();
 
-  if (tState.sort.key) {
-    const col = columns.find((c) => c.key === tState.sort.key);
+  const col = tState.sort.key ? columns.find((c) => c.key === tState.sort.key) : null;
+  if (col) {
     const dir = tState.sort.dir === 'desc' ? -1 : 1;
     list.sort((a, b) => {
       if (col.kind === 'num') {
@@ -1263,27 +1351,44 @@ const CAT_COLUMNS = [
 ];
 
 /** The search results: the working point first, then the spring itself. */
-const FIND_COLUMNS = [
-  { key: 'fits', label: 'fits', kind: 'select', align: 'l',
-    text: (h) => (h.ok ? (severity(h.evaluation.working?.travelUsedFraction) === 'ok' ? 'fits'
-      : severity(h.evaluation.working?.travelUsedFraction) === 'warn' ? 'tight' : 'at limit') : 'no'),
-    html: (h) => {
-      const sev = severity(h.evaluation.working?.travelUsedFraction);
-      return h.ok ? badge(sev, sev === 'ok' ? 'fits' : sev === 'warn' ? 'tight' : 'at limit') : badge('bad', 'no');
-    } },
-  { key: 'compress', spring: (h) => h.spring, label: 'compress by', unit: 'length', kind: 'num', alwaysDerived: true,
-    num: (h) => h.evaluation.working?.deflection_mm },
-  { key: 'installed', spring: (h) => h.spring, label: 'installed lg', unit: 'length', kind: 'num', alwaysDerived: true,
-    num: (h) => h.evaluation.working?.installedLength_mm },
-  { key: 'used', label: 'travel used', kind: 'num', dp: 0, suffix: '%', alwaysDerived: true,
-    num: (h) => (h.evaluation.working?.travelUsedFraction == null ? null : h.evaluation.working.travelUsedFraction * 100) },
-  { key: 'band', label: 'force band ±', kind: 'num', dp: 0, suffix: '%', alwaysDerived: true,
-    num: (h) => (h.evaluation.working?.sensitivity == null ? null : h.evaluation.working.sensitivity.worstCaseFraction * 100) },
-  { key: 'stress', label: 'stress', kind: 'num', dp: 0, suffix: '%', alwaysDerived: true,
-    num: (h) => (h.evaluation.working?.utilisation == null ? null : h.evaluation.working.utilisation * 100) },
-  ...springColumns((h) => h.spring),
-  { key: 'why', label: 'why not', kind: 'text', align: 'l', text: (h) => (h.ok ? '' : h.rejected[0] || '') },
-];
+/**
+ * Working-point columns. With a force band the same six questions have
+ * different answers at each end, so each column shows the end that decides:
+ * travel and stress at the top of the band, force error at the bottom.
+ */
+function findColumns(isRange) {
+  const worst = (h) => h.evaluation.worst;
+  return [
+    { key: 'fits', label: 'fits', kind: 'select', align: 'l',
+      text: (h) => (h.ok ? (severity(worst(h)?.travelUsedFraction) === 'ok' ? 'fits'
+        : severity(worst(h)?.travelUsedFraction) === 'warn' ? 'tight' : 'at limit') : 'no'),
+      html: (h) => {
+        const sev = severity(worst(h)?.travelUsedFraction);
+        return h.ok ? badge(sev, sev === 'ok' ? 'fits' : sev === 'warn' ? 'tight' : 'at limit') : badge('bad', 'no');
+      } },
+    isRange
+      ? { key: 'compress', spring: (h) => h.spring, label: 'band stroke', unit: 'length', kind: 'num', alwaysDerived: true,
+        num: (h) => h.evaluation.range?.stroke_mm }
+      : { key: 'compress', spring: (h) => h.spring, label: 'compress by', unit: 'length', kind: 'num', alwaysDerived: true,
+        num: (h) => h.evaluation.working?.deflection_mm },
+    { key: 'installed', spring: (h) => h.spring, unit: 'length', kind: 'num', alwaysDerived: true,
+      label: isRange ? 'lg at low end' : 'installed lg',
+      num: (h) => h.evaluation.working?.installedLength_mm },
+    ...(isRange ? [{ key: 'installed2', spring: (h) => h.spring, label: 'lg at high end', unit: 'length',
+      kind: 'num', alwaysDerived: true, num: (h) => h.evaluation.workingHigh?.installedLength_mm }] : []),
+    { key: 'used', kind: 'num', dp: 0, suffix: '%', alwaysDerived: true,
+      label: isRange ? 'travel used at top' : 'travel used',
+      num: (h) => (worst(h)?.travelUsedFraction == null ? null : worst(h).travelUsedFraction * 100) },
+    { key: 'band', kind: 'num', dp: 0, suffix: '%', alwaysDerived: true,
+      label: isRange ? 'force band ± at low end' : 'force band ±',
+      num: (h) => (worst(h)?.worstCaseFraction == null ? null : worst(h).worstCaseFraction * 100) },
+    { key: 'stress', kind: 'num', dp: 0, suffix: '%', alwaysDerived: true,
+      label: isRange ? 'stress at top' : 'stress',
+      num: (h) => (worst(h)?.utilisation == null ? null : worst(h).utilisation * 100) },
+    ...springColumns((h) => h.spring),
+    { key: 'why', label: 'why not', kind: 'text', align: 'l', text: (h) => (h.ok ? '' : h.rejected[0] || '') },
+  ];
+}
 
 /* --------------------------------------------------------- the catalogue */
 

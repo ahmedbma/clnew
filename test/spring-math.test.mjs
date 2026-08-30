@@ -275,6 +275,107 @@ test('evaluate places the working point and reports headroom', () => {
   assert.ok(tooMuch.reasons.some((r) => /travel/.test(r)));
 });
 
+test('a force band is two working points on one line', () => {
+  const s = sm.normalizeSpring({ od_mm: 10, wireDia_mm: 1, freeLength_mm: 20, totalCoils: 12 });
+  const ev = sm.evaluate(s, { targetForce_N: 1.5, targetForceHigh_N: 6 });
+  // The low end is still `working`, so nothing that reads a single force moved.
+  close(ev.working.targetForce_N, 1.5);
+  close(ev.workingHigh.targetForce_N, 6);
+  close(ev.range.low_N, 1.5);
+  close(ev.range.high_N, 6);
+  // Stroke depends only on the rate, not on where the band sits.
+  close(ev.range.stroke_mm, (6 - 1.5) / s.rate_Npmm);
+  close(ev.range.stroke_mm, sm.evaluate(s, { targetForce_N: 11.5, targetForceHigh_N: 16 }).range.stroke_mm);
+  // Installed length is reported short-end first: the top of the band is the
+  // shorter spring.
+  const [short, long] = ev.range.installedLength_mm;
+  assert.ok(short < long);
+  close(long, 20 - 1.5 / s.rate_Npmm);
+  close(short, 20 - 6 / s.rate_Npmm);
+  assert.equal(ev.feasible, true);
+});
+
+test('a band only passes if both ends fit, and it is the top end that fails', () => {
+  const s = sm.normalizeSpring({ od_mm: 10, wireDia_mm: 1, freeLength_mm: 20, totalCoils: 12 });
+  const tooHigh = s.maxUsableForce_N * 3;
+  // The bottom of the band on its own is fine.
+  assert.equal(sm.evaluate(s, { targetForce_N: 1.5 }).feasible, true);
+  const ev = sm.evaluate(s, { targetForce_N: 1.5, targetForceHigh_N: tooHigh });
+  assert.equal(ev.feasible, false);
+  assert.ok(ev.reasons.some((r) => /top of the band/.test(r)), ev.reasons.join(' | '));
+  assert.ok(!ev.reasons.some((r) => /bottom of the band/.test(r)));
+  // A single force never picks up the band wording.
+  const one = sm.evaluate(s, { targetForce_N: tooHigh });
+  assert.equal(one.feasible, false);
+  assert.ok(!one.reasons.some((r) => /band/.test(r)));
+});
+
+test('a high end at or below the low end is ignored, not an error', () => {
+  const s = sm.normalizeSpring({ od_mm: 10, wireDia_mm: 1, freeLength_mm: 20, totalCoils: 12 });
+  for (const high of [null, undefined, 1.5, 0.5]) {
+    const ev = sm.evaluate(s, { targetForce_N: 1.5, targetForceHigh_N: high });
+    assert.equal(ev.range, undefined, `high=${high}`);
+    assert.equal(ev.workingHigh, undefined, `high=${high}`);
+    close(ev.worst.targetForce_N, 1.5);
+  }
+});
+
+test('worst case is the top of the band for travel, the bottom for force error', () => {
+  const s = sm.normalizeSpring({ od_mm: 10, wireDia_mm: 1, freeLength_mm: 20, totalCoils: 12 });
+  const ev = sm.evaluate(s, { targetForce_N: 1.5, targetForceHigh_N: 6, positionTol_mm: 0.25, rateTol: 0.1 });
+  // Travel and stress: the top end works the spring hardest.
+  close(ev.worst.travelUsedFraction, ev.workingHigh.travelUsedFraction);
+  close(ev.worst.utilisation, ev.workingHigh.utilisation);
+  assert.ok(ev.worst.travelUsedFraction > ev.working.travelUsedFraction);
+  // Force error: position contributes the same newtons at both ends, so as a
+  // share of the load it is worst where the load is smallest.
+  close(ev.workingHigh.sensitivity.forceErrFromPosition_N,
+    ev.working.sensitivity.forceErrFromPosition_N);
+  assert.ok(ev.working.sensitivity.worstCaseFraction > ev.workingHigh.sensitivity.worstCaseFraction);
+  close(ev.worst.worstCaseFraction, ev.working.sensitivity.worstCaseFraction);
+});
+
+test('the envelope is judged on the spring at its longest, not its shortest', () => {
+  const s = sm.normalizeSpring({ partNumber: 'x', od_mm: 10, wireDia_mm: 1, freeLength_mm: 20, totalCoils: 12 });
+  const ev = sm.evaluate(s, { targetForce_N: 1.5, targetForceHigh_N: 6 });
+  // Longest at the bottom of the band; that is the space a design must reserve.
+  close(ev.worst.installedLength_mm, ev.working.installedLength_mm);
+  close(ev.worst.shortestLength_mm, ev.workingHigh.installedLength_mm);
+  assert.ok(ev.worst.installedLength_mm > ev.worst.shortestLength_mm);
+
+  const req = { targetForce_N: 1.5, targetForceHigh_N: 6, includeRejected: true };
+  const long = ev.working.installedLength_mm;
+  assert.equal(sm.searchCatalog([s], { ...req, maxInstalledLength_mm: long + 0.01 })[0].ok, true);
+  const tight = sm.searchCatalog([s], { ...req, maxInstalledLength_mm: long - 0.01 })[0];
+  assert.equal(tight.ok, false, 'a spring too long at the bottom of the band must be rejected');
+  assert.ok(tight.rejected.some((r) => /envelope/.test(r)));
+});
+
+test('searching a band keeps only springs that cover all of it', () => {
+  const springs = [
+    { partNumber: 'soft', od_mm: 10, wireDia_mm: 0.8, freeLength_mm: 30, totalCoils: 20 },
+    { partNumber: 'stiff', od_mm: 10, wireDia_mm: 1.6, freeLength_mm: 30, totalCoils: 20 },
+  ].map(sm.normalizeSpring);
+  const lowOnly = sm.searchCatalog(springs, { targetForce_N: 1.5 }).filter((r) => r.ok);
+  const band = sm.searchCatalog(springs, { targetForce_N: 1.5, targetForceHigh_N: 200 });
+  // Every spring that covers the band also covers its bottom end alone.
+  const okBand = band.filter((r) => r.ok).map((r) => r.spring.partNumber);
+  assert.ok(okBand.every((p) => lowOnly.some((r) => r.spring.partNumber === p)));
+  assert.ok(okBand.length < lowOnly.length, 'a band must not be easier to satisfy than one force');
+});
+
+test('minStroke_mm rejects a spring that sweeps the band too abruptly', () => {
+  const s = sm.normalizeSpring({ partNumber: 'x', od_mm: 10, wireDia_mm: 1, freeLength_mm: 20, totalCoils: 12 });
+  const stroke = sm.evaluate(s, { targetForce_N: 1, targetForceHigh_N: 4 }).range.stroke_mm;
+  const req = { targetForce_N: 1, targetForceHigh_N: 4, includeRejected: true };
+  assert.equal(sm.searchCatalog([s], { ...req, minStroke_mm: stroke * 0.9 })[0].ok, true);
+  const tight = sm.searchCatalog([s], { ...req, minStroke_mm: stroke * 1.1 })[0];
+  assert.equal(tight.ok, false);
+  assert.ok(tight.rejected.some((r) => /stroke/.test(r)));
+  // It has no bite at all when no band was asked for.
+  assert.equal(sm.searchCatalog([s], { targetForce_N: 1, minStroke_mm: 1e6 })[0].ok, true);
+});
+
 test('tolerance band: a soft spring holds force better than a stiff one', () => {
   const soft = sm.normalizeSpring({ od_mm: 10, wireDia_mm: 0.7, freeLength_mm: 25, totalCoils: 20 });
   const stiff = sm.normalizeSpring({ od_mm: 10, wireDia_mm: 1.2, freeLength_mm: 25, totalCoils: 20 });

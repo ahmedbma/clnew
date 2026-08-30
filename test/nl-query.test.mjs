@@ -19,6 +19,47 @@ test('a bare force in any unit', () => {
   assert.equal(f('1.5N').forceUnit, 'N');
 });
 
+test('a force band, however it is phrased', () => {
+  for (const q of ['1.5N to 15N', '1.5 to 15 N', 'between 1.5 and 15 N', 'from 1.5N up to 15N',
+    '1.5-15N', '1.5 \u2013 15 N', 'anywhere between 1.5 and 15 newtons']) {
+    const r = f(q);
+    close(r.force_N, 1.5, 1e-3);
+    close(r.forceHigh_N, 15, 1e-3);
+  }
+  // Spoken backwards it is still the same band.
+  close(f('15N down to 1.5N').force_N, 1.5, 1e-3);
+  close(f('15N down to 1.5N').forceHigh_N, 15, 1e-3);
+  // Both boxes are restated in one unit, the one the top end was given in.
+  const lbf = f('2 to 8 lbf');
+  assert.equal(lbf.forceUnit, 'lbf');
+  close(lbf.forceValue, 2, 1e-6);
+  close(lbf.forceHighValue, 8, 1e-6);
+  close(lbf.force_N, sm.lbfToN(2));
+});
+
+test('a band is read alongside the rest of the phrase', () => {
+  const r = f('1.5 to 15 N in a half inch bore, stainless');
+  close(r.force_N, 1.5, 1e-3);
+  close(r.forceHigh_N, 15, 1e-3);
+  close(r.maxOD_mm, sm.inToMm(0.5));
+  assert.equal(r.materialKey, 'stainless-302');
+  // The band's own digits must not be re-read as a diameter.
+  assert.ok(!parseQuery('1.5 to 15 N in a half inch bore').read
+    .some((x) => /OD|rod/.test(x.field) && /15/.test(x.from)));
+});
+
+test('a range that is not a force is left alone', () => {
+  // Lengths, and a mixed-number fraction, must not be swallowed as a band.
+  assert.equal(f('3N, 0.5 to 0.75 in bore').forceHigh_N, undefined);
+  assert.equal(f('2N in a 1-1/2 inch bore').forceHigh_N, undefined);
+  close(f('2N in a 1-1/2 inch bore').maxOD_mm, sm.inToMm(1.5));
+  // One force stays one force.
+  assert.equal(f('1.5N in a half inch bore').forceHigh_N, undefined);
+  // A bare "and" is not a range opener -- that stays one force and a leftover.
+  assert.equal(f('1.5N and 2N').forceHigh_N, undefined);
+  close(f('1.5N and 2N').force_N, 1.5);
+});
+
 test('a lone number takes the unit the form is already set to', () => {
   const r = parseQuery('1.5', { defaultForceUnit: 'lbf' });
   close(r.fields.force_N, sm.lbfToN(1.5));

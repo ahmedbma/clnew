@@ -67,6 +67,12 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(-
 .card.hero{padding:22px 18px}
 .hero-row{display:flex;gap:12px;align-items:stretch;flex-wrap:wrap}
 .hero-input{flex:0 1 260px}
+.band-input{flex:0 1 420px}
+.band-input input{min-width:0}
+.band-to{display:flex;align-items:center;padding:0 10px;font:600 15px/1 var(--sans);color:var(--muted);
+  background:var(--panel);border:1px solid var(--line);border-left:none;border-right:none}
+.band-input input#f-force2{border-radius:0;border-right:none;color:var(--muted)}
+.band-input input#f-force2:not(:placeholder-shown){color:inherit}
 .hero-input input{font:600 30px/1.2 var(--mono);padding:6px 12px;letter-spacing:-.02em}
 .hero-input select{font-size:16px;min-width:82px}
 .hero-row button.go{font-size:15px;padding:0 22px}
@@ -219,9 +225,13 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
   <div class="card hero">
     <h2>What force do you need?</h2>
     <div class="hero-row">
-      <div class="combo hero-input">
+      <div class="combo hero-input band-input">
         <input type="number" id="f-force" value="1.5" step="any" autocomplete="off"
-               aria-label="Output force">
+               aria-label="Output force, or the bottom of a force band">
+        <span class="band-to">to</span>
+        <input type="number" id="f-force2" step="any" autocomplete="off" placeholder="—"
+               aria-label="Top of the force band, optional"
+               title="Optional. Fill this in and you get the springs that can deliver every load from one to the other.">
         <select id="f-force-u" aria-label="Force unit">
           <option>N</option><option>lbf</option><option>gf</option><option>ozf</option><option>kgf</option>
         </select>
@@ -234,7 +244,9 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
     </div>
     <p class="equiv" id="f-equiv"></p>
     <p class="hint">That is the only thing you have to fill in. Leave everything else blank and you
-      get every spring that can make the force.</p>
+      get every spring that can make the force. Fill in the second box as well and you get a
+      <strong>band</strong> instead &mdash; only the springs that can deliver every load from one
+      end to the other without running out of travel.</p>
 
     <div class="nl">
       <label for="f-nl">Or just say what you need</label>
@@ -244,7 +256,8 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
         <button class="alt" id="f-nl-run">Read it</button>
       </div>
       <p class="hint">Plain words. It fills the boxes below and searches, and tells you exactly what
-        it understood &mdash; and what it could not.</p>
+        it understood &mdash; and what it could not. A band works here too:
+        &ldquo;1.5 to 15 N in a half inch bore&rdquo;.</p>
       <div id="f-nl-out"></div>
     </div>
 
@@ -297,6 +310,9 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg);padding:1px 4px
           <input type="number" id="f-minload" placeholder="any rating" step="any"></div>
         <div><label for="f-mintravel">Compress at least <span class="u" data-unit="length"></span></label>
           <input type="number" id="f-mintravel" placeholder="any travel" step="any"></div>
+        <div><label for="f-minstroke">Band stroke at least <span class="u" data-unit="length"></span></label>
+          <input type="number" id="f-minstroke" placeholder="any stroke" step="any"
+                 title="Only applies when a force band is set: how far the spring must move to sweep it."></div>
         <div><label for="f-maxtravel">Max share of usable travel</label>
           <input type="number" id="f-maxtravel" placeholder="100%" step="any"></div>
       </div>
@@ -521,6 +537,24 @@ End Type&#9;Closed"></textarea>
     <p>Allowable is a fraction of ultimate tensile strength, itself a function of wire diameter
        (S&#8348; = A/d&#7745;, Shigley table 10-4): 45% for music wire, 35% for austenitic stainless. The Wahl
        factor is reported alongside for anyone taking the spring into cyclic duty, where it is the one to use.</p>
+
+    <h3>A force band rather than one force</h3>
+    <p>Put a second force in and the spring is asked to do a job over a stroke, not to sit at a point.
+       Because the line is straight, that is still two points on it: the stroke needed to sweep the band is
+       <span class="eq" style="display:inline;padding:1px 6px">&Delta;F / k</span>, which depends only on
+       the rate and not on where the band sits. A spring is kept only if <em>both</em> ends work, and the
+       ends fail for different reasons &mdash; so each question is asked at the end that decides it:</p>
+    <ul>
+      <li><strong>Travel and stress</strong> at the top of the band, where the spring is worked hardest.</li>
+      <li><strong>The envelope</strong> at the bottom, where the spring is at its longest and needs the most room.</li>
+      <li><strong>Force band &plusmn;</strong> at the bottom too. Assembly position error is a distance, so it
+        contributes the same number of newtons everywhere on the line &mdash; which is the largest
+        <em>share</em> of the smallest load.</li>
+    </ul>
+    <p class="hint">With nothing else constraining the search, the top of the band decides almost everything:
+       any linear spring that reaches the high force passes the low one on the way. The band earns its keep
+       once you care about the stroke, the room the spring needs at its longest, or how well it holds force
+       at the bottom.</p>
 
     <h3>The number most calculators skip: how tightly can you hold the force?</h3>
     <p>Force error comes from two places &mdash; where the spring actually ends up (dF/dx = k, so a stiff

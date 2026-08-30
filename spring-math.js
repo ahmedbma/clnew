@@ -735,6 +735,9 @@ export function normalizeSpring(raw) {
  *
  * opts:
  *   targetForce_N      the working load you care about
+ *   targetForceHigh_N  optional top of a force band; when given, the spring is
+ *                      worked from targetForce_N up to here and has to stay
+ *                      inside its travel and stress at both ends
  *   positionTol_mm     assembly/travel tolerance at the working point
  *   rateTol            fractional rate tolerance, default 0.10 (commercial)
  *   freeLengthTol_mm   only matters if you cannot adjust at assembly
@@ -751,6 +754,7 @@ export function evaluate(springIn, opts = {}) {
 
   const {
     targetForce_N,
+    targetForceHigh_N = null,
     positionTol_mm = 0.25,
     // A spring that publishes its own rate tolerance knows better than any
     // blanket default.
@@ -803,58 +807,112 @@ export function evaluate(springIn, opts = {}) {
 
   if (targetForce_N == null) return out;
 
-  const x = deflectionForForce(k, targetForce_N);
-  const stress = stressAt(targetForce_N);
-  const work = {
-    targetForce_N,
-    deflection_mm: x,
-    installedLength_mm: s.freeLength_mm != null ? s.freeLength_mm - x : null,
-    ...stress,
-  };
-  if (s.usableTravel_mm != null) {
-    work.travelUsedFraction = x / s.usableTravel_mm;
-    work.travelHeadroom_mm = s.usableTravel_mm - x;
-  }
-  if (s.travelToSolid_mm != null) work.solidTravelUsedFraction = x / s.travelToSolid_mm;
+  // A force range is just two working points on the same straight line: the
+  // spring has to be inside its travel at the bottom of the band and still
+  // inside it at the top. A single force is the case where both ends coincide.
+  const highForce_N = targetForceHigh_N != null && targetForceHigh_N > targetForce_N
+    ? targetForceHigh_N
+    : null;
 
-  // How hard is it to actually hit this force?  dF/dx is the rate itself,
-  // so a stiff spring turns a small assembly error into a big force error.
+  // The position error is a distance, so it turns into the same number of
+  // newtons wherever you sit on the line. Only the rate share scales with load.
   const dx = positionTol_mm + freeLengthTol_mm;
   const forceErrFromPosition = k * dx;
-  const forceErrFromRate = targetForce_N * rateTol;
-  work.sensitivity = {
-    dFdx_NperMm: k,
-    rateTol,
-    rateTolSource: opts.rateTol != null ? 'entered' : s.rateTol != null ? 'published' : 'assumed',
-    positionBand_mm: dx,
-    forceErrFromPosition_N: forceErrFromPosition,
-    forceErrFromRate_N: forceErrFromRate,
-    worstCase_N: forceErrFromPosition + forceErrFromRate,
-    rss_N: Math.hypot(forceErrFromPosition, forceErrFromRate),
-    worstCaseFraction: (forceErrFromPosition + forceErrFromRate) / targetForce_N,
-    rssFraction: Math.hypot(forceErrFromPosition, forceErrFromRate) / targetForce_N,
-    forceRange_N: [
-      Math.max(0, targetForce_N - forceErrFromPosition - forceErrFromRate),
-      targetForce_N + forceErrFromPosition + forceErrFromRate,
-    ],
+  const rateTolSource = opts.rateTol != null ? 'entered' : s.rateTol != null ? 'published' : 'assumed';
+
+  const pointAt = (F) => {
+    const x = deflectionForForce(k, F);
+    const w = {
+      targetForce_N: F,
+      deflection_mm: x,
+      installedLength_mm: s.freeLength_mm != null ? s.freeLength_mm - x : null,
+      ...stressAt(F),
+    };
+    if (s.usableTravel_mm != null) {
+      w.travelUsedFraction = x / s.usableTravel_mm;
+      w.travelHeadroom_mm = s.usableTravel_mm - x;
+    }
+    if (s.travelToSolid_mm != null) w.solidTravelUsedFraction = x / s.travelToSolid_mm;
+
+    // How hard is it to actually hit this force?  dF/dx is the rate itself,
+    // so a stiff spring turns a small assembly error into a big force error.
+    const forceErrFromRate = F * rateTol;
+    w.sensitivity = {
+      dFdx_NperMm: k,
+      rateTol,
+      rateTolSource,
+      positionBand_mm: dx,
+      forceErrFromPosition_N: forceErrFromPosition,
+      forceErrFromRate_N: forceErrFromRate,
+      worstCase_N: forceErrFromPosition + forceErrFromRate,
+      rss_N: Math.hypot(forceErrFromPosition, forceErrFromRate),
+      worstCaseFraction: (forceErrFromPosition + forceErrFromRate) / F,
+      rssFraction: Math.hypot(forceErrFromPosition, forceErrFromRate) / F,
+      forceRange_N: [
+        Math.max(0, F - forceErrFromPosition - forceErrFromRate),
+        F + forceErrFromPosition + forceErrFromRate,
+      ],
+    };
+    return w;
   };
+
+  const work = pointAt(targetForce_N);
   out.working = work;
+  const high = highForce_N != null ? pointAt(highForce_N) : null;
+  if (high) {
+    out.workingHigh = high;
+    out.range = {
+      low_N: targetForce_N,
+      high_N: highForce_N,
+      // The stroke is what the mechanism has to move to sweep the band, and it
+      // depends only on the rate -- not on where the band sits.
+      stroke_mm: high.deflection_mm - work.deflection_mm,
+      installedLength_mm: work.installedLength_mm != null
+        ? [high.installedLength_mm, work.installedLength_mm]
+        : null,
+    };
+  }
+
+  // One place decides what "worst case" means, so ranking and filtering do not
+  // each have to know whether a range was asked for. Travel and stress bite
+  // hardest at the top of the band; the force band, being a fixed number of
+  // newtons from position, is worst as a fraction at the bottom.
+  const deepest = high || work;
+  out.worst = {
+    targetForce_N: deepest.targetForce_N,
+    deflection_mm: deepest.deflection_mm,
+    // The space a design has to reserve is the spring at its longest, and the
+    // spring is longest at the bottom of the band -- the top end is where it is
+    // shortest. Everything else here is worst at the top.
+    installedLength_mm: work.installedLength_mm,
+    shortestLength_mm: deepest.installedLength_mm,
+    travelUsedFraction: deepest.travelUsedFraction ?? null,
+    travelHeadroom_mm: deepest.travelHeadroom_mm ?? null,
+    utilisation: deepest.utilisation,
+    worstCaseFraction: work.sensitivity.worstCaseFraction,
+    rssFraction: work.sensitivity.rssFraction,
+  };
 
   // Feasibility
   const reasons = [];
-  if (x <= 0) reasons.push('Target force is zero or negative.');
-  if (s.usableTravel_mm != null && x > s.usableTravel_mm) {
-    reasons.push(`Needs ${x.toFixed(2)} mm of travel but only ${s.usableTravel_mm.toFixed(2)} mm is usable (${s.usableTravelSource}).`);
-  }
-  if (s.freeLength_mm != null && work.installedLength_mm != null && s.solidLength_mm != null &&
-      work.installedLength_mm < s.solidLength_mm) {
-    reasons.push('Working point is past the solid length - the spring is fully collapsed before it reaches this force.');
-  }
-  if (stress.utilisation != null && stress.utilisation > 1) {
-    reasons.push(`Shear stress at the working load is ${(stress.utilisation * 100).toFixed(0)}% of allowable.`);
-  }
+  const where = (w) => (high ? (w === high ? ' at the top of the band' : ' at the bottom of the band') : '');
+  const check = (w) => {
+    if (w.deflection_mm <= 0) reasons.push('Target force is zero or negative.');
+    if (s.usableTravel_mm != null && w.deflection_mm > s.usableTravel_mm) {
+      reasons.push(`Needs ${w.deflection_mm.toFixed(2)} mm of travel${where(w)} but only ${s.usableTravel_mm.toFixed(2)} mm is usable (${s.usableTravelSource}).`);
+    }
+    if (s.freeLength_mm != null && w.installedLength_mm != null && s.solidLength_mm != null &&
+        w.installedLength_mm < s.solidLength_mm) {
+      reasons.push(`Working point${where(w)} is past the solid length - the spring is fully collapsed before it reaches this force.`);
+    }
+    if (w.utilisation != null && w.utilisation > 1) {
+      reasons.push(`Shear stress at the working load${where(w)} is ${(w.utilisation * 100).toFixed(0)}% of allowable.`);
+    }
+  };
+  check(work);
+  if (high) check(high);
   if (out.buckling && !out.buckling.unconditionallyStable &&
-      out.buckling.criticalDeflection_mm != null && x > out.buckling.criticalDeflection_mm) {
+      out.buckling.criticalDeflection_mm != null && deepest.deflection_mm > out.buckling.criticalDeflection_mm) {
     out.warnings.push(`Buckles at ${out.buckling.criticalDeflection_mm.toFixed(2)} mm deflection unless guided in a bore or over a rod.`);
   }
   out.feasible = reasons.length === 0;
@@ -868,7 +926,12 @@ export function evaluate(springIn, opts = {}) {
  * Rank a catalog against a working-point requirement.
  *
  * req:
- *   targetForce_N            required
+ *   targetForce_N            required -- the working load, or the bottom of a band
+ *   targetForceHigh_N        optional top of a force band; a spring only passes
+ *                            if it can deliver every load from targetForce_N up
+ *                            to here without running out of travel or stress
+ *   minStroke_mm             insist the band take at least this much travel to
+ *                            sweep, so the load is not knife-edged on position
  *   forceTolerance           fractional band the force must land in (unused for
  *                            search since deflection is solved exactly, but
  *                            kept for the tolerance report), default 0.10
@@ -902,6 +965,7 @@ export function searchCatalog(springs, req = {}) {
     materials = null, ends = null, families = null,
     minTravelHeadroom_mm = 0,
     minDeflection_mm = null,
+    minStroke_mm = null,
     maxTravelUsedFraction = 1,
     sortBy = 'robustness',
     includeRejected = false,
@@ -947,17 +1011,23 @@ export function searchCatalog(springs, req = {}) {
     const ev = evaluate(s, { targetForce_N, ...evalOpts });
     if (!ev.feasible) rejected.push(...ev.reasons);
     if (ev.working) {
-      if (ev.working.travelHeadroom_mm != null && ev.working.travelHeadroom_mm < minTravelHeadroom_mm) {
-        rejected.push(`Only ${ev.working.travelHeadroom_mm.toFixed(2)} mm of travel left past the working point.`);
+      // Travel, stress and envelope are judged at the deeper end of the band --
+      // ev.worst is the working point itself when only one force was asked for.
+      const worst = ev.worst;
+      if (worst.travelHeadroom_mm != null && worst.travelHeadroom_mm < minTravelHeadroom_mm) {
+        rejected.push(`Only ${worst.travelHeadroom_mm.toFixed(2)} mm of travel left past the working point.`);
       }
       if (minDeflection_mm != null && ev.working.deflection_mm < minDeflection_mm) {
         rejected.push(`Reaches the force after only ${ev.working.deflection_mm.toFixed(2)} mm - too stiff for the travel asked for.`);
       }
-      if (ev.working.travelUsedFraction != null && ev.working.travelUsedFraction > maxTravelUsedFraction) {
-        rejected.push(`Uses ${(ev.working.travelUsedFraction * 100).toFixed(0)}% of usable travel.`);
+      if (minStroke_mm != null && ev.range != null && ev.range.stroke_mm < minStroke_mm) {
+        rejected.push(`Sweeps the whole band in ${ev.range.stroke_mm.toFixed(2)} mm - too stiff for the stroke asked for.`);
       }
-      if (maxInstalledLength_mm != null && ev.working.installedLength_mm != null &&
-          ev.working.installedLength_mm > maxInstalledLength_mm) {
+      if (worst.travelUsedFraction != null && worst.travelUsedFraction > maxTravelUsedFraction) {
+        rejected.push(`Uses ${(worst.travelUsedFraction * 100).toFixed(0)}% of usable travel.`);
+      }
+      if (maxInstalledLength_mm != null && worst.installedLength_mm != null &&
+          worst.installedLength_mm > maxInstalledLength_mm) {
         rejected.push('Installed length exceeds the envelope.');
       }
     }
@@ -976,25 +1046,32 @@ export function searchCatalog(springs, req = {}) {
 
 function scoreResult(r, sortBy) {
   const w = r.evaluation.working;
+  // Every ranking judges the spring over the whole band it was asked for, which
+  // for a single force is the one working point.
+  const worst = r.evaluation.worst;
   const s = r.spring;
   if (!w) return -Infinity;
   switch (sortBy) {
     case 'travel':
-      return w.travelHeadroom_mm ?? 0;
+      return worst.travelHeadroom_mm ?? 0;
     case 'compact':
-      return -((s.od_mm ?? 0) * (w.installedLength_mm ?? s.freeLength_mm ?? 0));
+      return -((s.od_mm ?? 0) * (worst.installedLength_mm ?? s.freeLength_mm ?? 0));
     case 'rate':
       return -(s.rate_Npmm ?? Infinity);
     case 'force-precision':
-      return -(w.sensitivity?.rssFraction ?? Infinity);
+      return -(worst.rssFraction ?? Infinity);
     case 'robustness':
     default: {
       // Favour a working point that sits mid-travel with low force sensitivity
       // and comfortable stress -- the spring you can actually build around.
-      const sens = w.sensitivity?.rssFraction ?? 1;
-      const used = w.travelUsedFraction ?? 0.5;
-      const midTravel = 1 - Math.abs(used - 0.45) / 0.55; // 1 at 45% of travel
-      const stressMargin = 1 - Math.min(w.utilisation ?? 0.5, 1);
+      // With a band, "mid-travel" means the band straddling the middle rather
+      // than either end of it sitting there.
+      const sens = worst.rssFraction ?? 1;
+      const mid = r.evaluation.range
+        ? ((w.travelUsedFraction ?? 0) + (worst.travelUsedFraction ?? 1)) / 2
+        : (w.travelUsedFraction ?? 0.5);
+      const midTravel = 1 - Math.abs(mid - 0.45) / 0.55; // 1 at 45% of travel
+      const stressMargin = 1 - Math.min(worst.utilisation ?? 0.5, 1);
       return 0.5 * (1 - Math.min(sens, 1)) + 0.35 * Math.max(midTravel, 0) + 0.15 * stressMargin;
     }
   }

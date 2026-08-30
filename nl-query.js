@@ -48,6 +48,28 @@ function forceUnitOption(unit) {
 const LENGTH_UNITS = /^("|''|in|ins|inch|inches|mm|millimet(er|re)s?|cm|thou|mil|mils)$/;
 
 /**
+ * "1.5N to 15N", "between 1.5 and 15 N", "2-8 lbf", "15N down to 1.5N".
+ *
+ * The unit is required on the second number, which is what keeps this off
+ * length ranges ("0.5 to 0.75 in") and mixed-number fractions ("1-1/2 inch")
+ * with no extra guarding. "and" only joins a band behind an opening word, so a
+ * plain "1.5N and 2N" stays what it always was: one force and a leftover.
+ */
+const FORCE_UNIT_ALT = '(?:n|newtons?|lbf?|lbs|pounds?|oz|ozf|ounces?|gf?|grams?|gram-force|kgf?|kilograms?)';
+const NUM = '(\\d*\\.\\d+|\\d+)';
+const BAND_TAIL = '\\s*' + NUM + '\\s*(' + FORCE_UNIT_ALT + ')(?![a-z/])';
+const FORCE_RANGE_RES = [
+  // Opened by a word that can only mean a range, so "and" is safe here.
+  new RegExp('\\b(?:anywhere\\s+between|between|from|range\\s+of)\\s+' + NUM
+    + '\\s*(' + FORCE_UNIT_ALT + ')?\\s*(?:\\bto\\b|\\band\\b|\\bthrough\\b|-|\u2013|\u2014)'
+    + BAND_TAIL, 'i'),
+  // Bare form: the joining word has to be unambiguous on its own.
+  new RegExp(NUM + '\\s*(' + FORCE_UNIT_ALT + ')?\\s*'
+    + '(?:(?:down|up)\\s+)?(?:\\bto\\b|\\bthrough\\b|-|\u2013|\u2014)'
+    + BAND_TAIL, 'i'),
+];
+
+/**
  * Split on clause boundaries. Without this a cue leaks across a comma --
  * "over a 1/8 shaft, max installed length 0.4in" would read the second
  * number as another shaft, because "shaft" is still in the look-behind.
@@ -179,6 +201,34 @@ export function parseQuery(input, { defaultForceUnit = 'N' } = {}) {
   takeRates(RATE_UNIT_RE, true);
   takeRates(RATE_WORD_RE, false);
 
+  // A force band is read off the whole phrase before it is chopped into
+  // clauses, because "between 1.5 and 15 N" straddles an "and" boundary. Like a
+  // rate, the span is blanked out so its digits are not read a second time.
+  let forceRange = null;
+  const fr = FORCE_RANGE_RES.reduce((hit, re) => hit || re.exec(scrubbed), null);
+  if (fr) {
+    const unitB = fr[4].toLowerCase();
+    const unitA = (fr[2] || unitB).toLowerCase();
+    const a = toNewtons(`${fr[1]} ${unitA}`, defaultForceUnit);
+    const b = toNewtons(`${fr[3]} ${unitB}`, defaultForceUnit);
+    if (a != null && b != null && a > 0 && b > 0 && a !== b) {
+      const [lo, hi] = a < b ? [a, b] : [b, a];
+      forceRange = { lo, hi };
+      fields.force_N = lo;
+      fields.forceHigh_N = hi;
+      fields.forceUnit = forceUnitOption(unitB);
+      // The boxes are both read in one unit, so both values are restated in it
+      // rather than each keeping the unit it happened to be spoken in.
+      const per = toNewtons(`1 ${unitB}`, defaultForceUnit);
+      fields.forceValue = lo / per;
+      fields.forceHighValue = hi / per;
+      read.push({ field: 'force band', from: fr[0].trim(),
+        value: `${lo.toFixed(3)} N to ${hi.toFixed(3)} N`,
+        note: 'springs must cover the whole band' });
+      scrubbed = scrubbed.slice(0, fr.index) + ' '.repeat(fr[0].length) + scrubbed.slice(fr.index + fr[0].length);
+    }
+  }
+
   const found = measurements(scrubbed);
 
   // Which unit system is the person speaking in? Decide from the lengths they
@@ -197,7 +247,10 @@ export function parseQuery(input, { defaultForceUnit = 'N' } = {}) {
 
   // --- force -----------------------------------------------------------
   let forceTaken = null;
-  if (forceish.length) {
+  if (forceRange) {
+    // Already taken as a band above; any further force is spare.
+    forceish.forEach((m) => unparsed.push({ from: m.text, why: 'a force band was already read from this' }));
+  } else if (forceish.length) {
     forceTaken = forceish[0];
     const N = toNewtons(forceTaken.text, defaultForceUnit);
     if (N != null && N > 0) {
